@@ -203,9 +203,7 @@ ifeq ($(TARGET_ARCH),arm)
                 src/opts/S32A_Blend_BlitRow32_arm.S
 endif
 
-# Added to build with the armv5te cflags changes.
-
-ifeq "$(findstring armv5te,$(TARGET_ARCH_VARIANT))" "armv5te"
+ifeq "$(findstring armv5te-vfp,$(TARGET_ARCH_VARIANT))" "armv5te-vfp"
         LOCAL_SRC_FILES += \
                 src/opts/S32_Opaque_D32_nofilter_DX_gether_arm.S
 endif
