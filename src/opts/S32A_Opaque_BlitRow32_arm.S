@@ -39,6 +39,8 @@ S32A_Opaque_BlitRow32_arm:
     mov      r5, #64
     sub      r2,r2,#8
 .Lloop:
+    pld     [r1, #256]
+    pld     [r0, #256]
     sub      r2,r2,#16
     vsubw.u8 q4,q14,d3               //Q4.16 = 256-d3
 

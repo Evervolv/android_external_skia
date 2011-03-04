@@ -27,16 +27,174 @@ S32A_Blend_BlitRow32_arm:
 
 #if __ARM_ARCH__ == 7 || defined(__ARM_NEON__)
 
-    subs     r2,#8
-    blt      .Lless_than_8
+    cmp     r2,#24
+    blt      .Lslow_path
 
+    push {r4, r5}
     vpush    {q4-q7}
     vmov.u16 q14,#0x100
 
     // store src_scale in q4
     vdup.u16  q4, r3
 
-.Lblitrow32_loop_8:
+    vld4.8  {d0, d1, d2, d3}, [r1]! //d0,d1,d2,d3 = sourc rgb(0,1,2,3) A(0,1,2,3)
+                                    //update source ptr but not dst ptr
+    vld4.8  {d4, d5, d6, d7}, [r0]  //d4,d5,d6,d7 = dst rgb(0,1,2,3) A(0,1,2,3)
+    add      r4, r0, #32 // minus 16 to pretend the last round
+    mov      r5, #64
+    sub      r2,r2,#8
+
+.Lloop:
+    pld     [r1, #256]
+    pld     [r0, #256]
+    subs     r2, r2, #16
+    cmp      r2,#16
+
+    // expand destination from 8-bit to 16-bit
+    vmovl.u8 q6, d4
+    vmovl.u8 q7, d5
+    vmovl.u8 q8, d6
+    vmovl.u8 q9, d7
+
+    // expand source from 8-bit to 16-bit
+    vmovl.u8 q13, d3
+    vmovl.u8 q10, d0
+    vmovl.u8 q11, d1
+    vmovl.u8 q12, d2
+
+                                    //update source ptr but not dst ptr
+    // calculate destination scale
+    vmul.u16 q5, q13, q4
+    vshr.u16 q5, q5, #8
+    vsub.u16 q5, q14, q5
+
+    vld4.8  {d0, d1, d2, d3}, [r1]! //d0,d1,d2,d3 = sourc rgb(0,1,2,3) A(0,1,2,3)
+    // multiply destination ARGB components with dst_scale
+    vmul.u16 q6, q6, q5
+    vmul.u16 q7, q7, q5
+    vmul.u16 q8, q8, q5
+    vmul.u16 q9, q9, q5
+
+
+    vld4.8  {d4, d5, d6, d7}, [r4]  //d4,d5,d6,d7 = dst rgb(0,1,2,3) A(0,1,2,3)
+
+    // multiply source ARGB components with src_scale
+    vmul.u16 q10, q10, q4
+    vmul.u16 q11, q11, q4
+    vmul.u16 q12, q12, q4
+    vmul.u16 q13, q13, q4
+
+
+    // add processed src and dest pixels and extract high bytes
+    vqadd.u8  q10, q6, q10
+    vqadd.u8  q11, q7, q11
+    vqadd.u8  q12, q8, q12
+    vqadd.u8  q13, q9, q13
+
+    vshrn.u16 d20, q10, #8
+    vshrn.u16 d21, q11, #8
+    vshrn.u16 d22, q12, #8
+    vshrn.u16 d23, q13, #8
+
+    vst4.8  {d20, d21, d22, d23}, [r0], r5 //dst rgb(0,1,2,3) A(0,1,2,3) = d4,d5,d6,d7
+
+    // expand destination from 8-bit to 16-bit
+    vmovl.u8 q6, d4
+    vmovl.u8 q7, d5
+    vmovl.u8 q8, d6
+    vmovl.u8 q9, d7
+
+    // expand source from 8-bit to 16-bit
+    vmovl.u8 q13, d3
+    vmovl.u8 q10, d0
+    vmovl.u8 q11, d1
+    vmovl.u8 q12, d2
+
+    // calculate destination scale
+    vmul.u16 q5, q13, q4
+    vshr.u16 q5, q5, #8
+    vsub.u16 q5, q14, q5
+
+    vld4.8  {d0, d1, d2, d3}, [r1]! //d0,d1,d2,d3 = sourc rgb(0,1,2,3) A(0,1,2,3)
+
+    // multiply destination ARGB components with dst_scale
+    vmul.u16 q6, q6, q5
+    vmul.u16 q7, q7, q5
+    vmul.u16 q8, q8, q5
+    vmul.u16 q9, q9, q5
+
+    vld4.8  {d4, d5, d6, d7}, [r0]  //d4,d5,d6,d7 = dst rgb(0,1,2,3) A(0,1,2,3)
+
+    // multiply source ARGB components with src_scale
+    vmul.u16 q10, q10, q4
+    vmul.u16 q11, q11, q4
+    vmul.u16 q12, q12, q4
+    vmul.u16 q13, q13, q4
+
+
+    // add processed src and dest pixels and extract high bytes
+    vqadd.u8  q10, q6, q10
+    vqadd.u8  q11, q7, q11
+    vqadd.u8  q12, q8, q12
+    vqadd.u8  q13, q9, q13
+
+    vshrn.u16 d20, q10, #8
+    vshrn.u16 d21, q11, #8
+    vshrn.u16 d22, q12, #8
+    vshrn.u16 d23, q13, #8
+
+    vst4.8  {d20, d21, d22, d23}, [r4], r5 //dst rgb(0,1,2,3) A(0,1,2,3) = d4,d5,d6,d7
+
+    bge     .Lloop
+
+//There are 8 words left unprocessed from previous round
+    // expand destination from 8-bit to 16-bit
+    vmovl.u8 q6, d4
+    vmovl.u8 q7, d5
+    vmovl.u8 q8, d6
+    vmovl.u8 q9, d7
+
+    // expand source from 8-bit to 16-bit
+    vmovl.u8 q13, d3
+    vmovl.u8 q10, d0
+    vmovl.u8 q11, d1
+    vmovl.u8 q12, d2
+
+    // calculate destination scale
+    vmul.u16 q5, q13, q4
+    vshr.u16 q5, q5, #8
+    vsub.u16 q5, q14, q5
+
+    // multiply destination ARGB components with dst_scale
+    vmul.u16 q6, q6, q5
+    vmul.u16 q7, q7, q5
+    vmul.u16 q8, q8, q5
+    vmul.u16 q9, q9, q5
+
+    // multiply source ARGB components with src_scale
+    vmul.u16 q10, q10, q4
+    vmul.u16 q11, q11, q4
+    vmul.u16 q12, q12, q4
+    vmul.u16 q13, q13, q4
+
+    // add processed src and dest pixels and extract high bytes
+    vqadd.u8  q10, q6, q10
+    vqadd.u8  q11, q7, q11
+    vqadd.u8  q12, q8, q12
+    vqadd.u8  q13, q9, q13
+
+    vshrn.u16 d20, q10, #8
+    vshrn.u16 d21, q11, #8
+    vshrn.u16 d22, q12, #8
+    vshrn.u16 d23, q13, #8
+
+    vst4.8  {d20, d21, d22, d23}, [r0]! //dst rgb(0,1,2,3) A(0,1,2,3) = d4,d5,d6,d7
+
+.Lless_than_16:
+    cmp      r2,#8
+    blt      .Lless_than_8
+
+    sub      r2,r2,#8
 
     vld4.8  {d0, d1, d2, d3}, [r1]! //d0,d1,d2,d3 = sourc rgb(0,1,2,3) A(0,1,2,3)
                                     //update source ptr but not dst ptr
@@ -71,8 +229,6 @@ S32A_Blend_BlitRow32_arm:
     vmul.u16 q12, q12, q4
     vmul.u16 q13, q13, q4
 
-    subs     r2, r2, #8
-
     // add processed src and dest pixels and extract high bytes
     vqadd.u8  q10, q6, q10
     vqadd.u8  q11, q7, q11
@@ -85,12 +241,13 @@ S32A_Blend_BlitRow32_arm:
     vshrn.u16 d7, q13, #8
 
     vst4.8  {d4, d5, d6, d7}, [r0]! //dst rgb(0,1,2,3) A(0,1,2,3) = d4,d5,d6,d7
-    bge     .Lblitrow32_loop_8
-
-    vpop     {q4-q7}
 
 .Lless_than_8:
-    adds     r2, #8
+    vpop     {q4-q7}
+    pop {r4, r5}
+
+.Lslow_path:
+    adds     r2, #0
     bxeq      lr
 #endif
 
