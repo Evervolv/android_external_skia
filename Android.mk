@@ -224,8 +224,9 @@ endif
 
 ifeq ($(ARCH_ARM_HAVE_NEON),true)
 	LOCAL_SRC_FILES += \
-                src/opts/memset16_neon.S \
-                src/opts/memset32_neon.S
+		src/opts/memset16_neon.S \
+		src/opts/memset32_neon.S \
+		src/opts/S16_D32_arm.S
 endif
 
 LOCAL_SHARED_LIBRARIES := \

@@ -135,8 +135,19 @@ bool SkBitmapProcShader::setContext(const SkBitmap& device,
     return true;
 }
 
-#define BUF_MAX     128
+#define BUF_MAX     1024
 
+#if defined(__ARM_HAVE_NEON)
+void clampx_nofilter_trans(const SkBitmapProcState& s,
+                                  uint32_t xy[], int count, int x, int y) ;
+
+void S16_opaque_D32_nofilter_DX(const SkBitmapProcState& s,
+                            const uint32_t* SK_RESTRICT xy,
+                            int count, uint32_t* SK_RESTRICT colors) ;
+
+void clampx_nofilter_trans_S16_D32_DX(const SkBitmapProcState& s,
+                                  uint32_t xy[], int count, int x, int y, uint32_t* SK_RESTRICT colors) ;
+#endif
 void SkBitmapProcShader::shadeSpan(int x, int y, SkPMColor dstC[], int count) {
     const SkBitmapProcState& state = fState;
     if (state.fShaderProc32) {
@@ -158,8 +169,17 @@ void SkBitmapProcShader::shadeSpan(int x, int y, SkPMColor dstC[], int count) {
         if (n > max) {
             n = max;
         }
+#if defined(__ARM_HAVE_NEON)
+        if( sproc == S16_opaque_D32_nofilter_DX && mproc == clampx_nofilter_trans ){
+            clampx_nofilter_trans_S16_D32_DX(state, buffer, n, x, y, dstC);
+        } else {
+            mproc(state, buffer, n, x, y);
+            sproc(state, buffer, n, dstC);
+        }
+#else
         mproc(state, buffer, n, x, y);
         sproc(state, buffer, n, dstC);
+#endif
         
         if ((count -= n) == 0) {
             break;
