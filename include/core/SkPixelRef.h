@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2008 The Android Open Source Project
- * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -124,13 +123,6 @@ public:
         }
     };
 
-    virtual bool pixelsAvailable() {
-        /**  If this is not overloaded by the subclass, assume pixels are
-             available if they were previously locked.
-        */
-        return fWasLocked;
-    }
-
 protected:
     /** Called when the lockCount goes from 0 to 1. The caller will have already
         acquire a mutex for thread safety, so this method need not do that.
@@ -149,10 +141,6 @@ protected:
 
     SkPixelRef(SkFlattenableReadBuffer&, SkMutex*);
 
-    /** The local mutex associated with this pixel ref.
-    */
-    SkMutex         fLocalMutex;
-
 private:
     SkMutex*        fMutex; // must remain in scope for the life of this object
     void*           fPixels;
@@ -165,9 +153,6 @@ private:
 
     // can go from false to true, but never from true to false
     bool    fIsImmutable;
-    /** Boolean to indicate that this has been locked before.
-    */
-    bool    fWasLocked;
 };
 
 #endif
