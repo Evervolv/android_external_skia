@@ -31,6 +31,10 @@
     #define kMatrix22Elem   SK_Fract1
 #endif
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 /*      [scale-x    skew-x      trans-x]   [X]   [X']
         [skew-y     scale-y     trans-y] * [Y] = [Y']
         [persp-0    persp-1     persp-2]   [1]   [1 ]
@@ -1216,6 +1220,9 @@ int SkPerspIter::next() {
     int n = fCount;
     
     if (0 == n) {
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
         return 0;
     }
     SkPoint pt;
@@ -1247,6 +1254,9 @@ int SkPerspIter::next() {
     }
     
     fCount -= n;
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return n;
 }
 

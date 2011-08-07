@@ -37,6 +37,10 @@ extern "C"  void S32A_Blend_BlitRow32_arm(SkPMColor* SK_RESTRICT dst,
                                           int count,
                                           U8CPU alpha);
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 #if defined(__ARM_HAVE_NEON) && defined(SK_CPU_LENDIAN)
 static void S32A_D565_Opaque_neon(uint16_t* SK_RESTRICT dst,
                                   const SkPMColor* SK_RESTRICT src, int count,
@@ -210,6 +214,9 @@ static void S32A_D565_Opaque_neon(uint16_t* SK_RESTRICT dst,
                       "d30","d31"
                       );
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void S32A_D565_Blend_neon(uint16_t* SK_RESTRICT dst,
@@ -320,6 +327,9 @@ static void S32A_D565_Blend_neon(uint16_t* SK_RESTRICT dst,
             dst += 1;
         } while (--count != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 /* dither matrix for Neon, derived from gDitherMatrix_3Bit_16.
@@ -400,6 +410,10 @@ static void S32_D565_Blend_Dither_neon(uint16_t *dst, const SkPMColor *src,
                   : "cc", "memory", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d16", "d17", "d18", "d19", "d20", "d21", "d22", "d23", "d24", "d28", "d29", "d30", "d31"
                   );
     
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
+
     DITHER_565_SCAN(y);
     
     while((count & 7) > 0)
@@ -421,6 +435,9 @@ static void S32_D565_Blend_Dither_neon(uint16_t *dst, const SkPMColor *src,
         DITHER_INC_X(x);
         count--;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #define S32A_D565_Blend_PROC        S32A_D565_Blend_neon
@@ -950,6 +967,9 @@ static void S32A_Opaque_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
             dst += 1;
         }
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #endif
@@ -1030,6 +1050,9 @@ static void S32_Blend_BlitRow32_neon(SkPMColor* SK_RESTRICT dst,
 
 #undef	UNROLL
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #define	S32_Blend_BlitRow32_PROC	S32_Blend_BlitRow32_neon
@@ -1061,6 +1084,9 @@ static void showme8(char *str, void *p, int len)
 	    strcat(buf, tbuf);
 	}
 	SkDebugf("%s\n", buf);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 static void showme16(char *str, void *p, int len)
 {
@@ -1075,6 +1101,9 @@ static void showme16(char *str, void *p, int len)
 	    strcat(buf, tbuf);
 	}
 	SkDebugf("%s\n", buf);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 #endif
 
@@ -1313,6 +1342,9 @@ static void S32A_D565_Opaque_Dither_neon (uint16_t * SK_RESTRICT dst,
             DITHER_INC_X(x);
         } while (--count != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #define	S32A_D565_Opaque_Dither_PROC S32A_D565_Opaque_Dither_neon
@@ -1427,6 +1459,9 @@ static void S32_D565_Opaque_Dither_neon(uint16_t* SK_RESTRICT dst,
             DITHER_INC_X(x);
         } while (--count != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #define	S32_D565_Opaque_Dither_PROC S32_D565_Opaque_Dither_neon

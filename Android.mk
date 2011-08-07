@@ -2,7 +2,7 @@ BASE_PATH := $(call my-dir)
 LOCAL_PATH:= $(call my-dir)
 
 #############################################################
-#   build the skia+fretype+png+jpeg+zlib+gif library
+#   build the skia+fretype+png+jpeg+zlib+gif+webp library
 #
 
 include $(CLEAR_VARS)
@@ -12,6 +12,10 @@ LOCAL_ARM_MODE := arm
 # need a flag to tell the C side when we're on devices with large memory
 # budgets (i.e. larger than the low-end devices that initially shipped)
 ifeq ($(ARCH_ARM_HAVE_VFP),true)
+    TARGET_SKIA_USE_MORE_MEMORY := true
+endif
+
+ifeq ($(TARGET_SKIA_USE_MORE_MEMORY),true)
     LOCAL_CFLAGS += -DANDROID_LARGE_MEMORY_DEVICE
 endif
 
@@ -30,6 +34,10 @@ endif
 # procedures (C and assembly) seriously improve skia performance
 ifeq "$(findstring tegra,$(TARGET_BOARD_PLATFORM))" "tegra"
 	LOCAL_CFLAGS += -DTEST_SRC_ALPHA
+endif
+
+ifeq ($(TARGET_BOARD_PLATFORM),omap4)
+    LOCAL_CFLAGS += -DTARGET_OMAP4
 endif
 
 LOCAL_SRC_FILES:= \
@@ -77,6 +85,7 @@ LOCAL_SRC_FILES:= \
 	src/images/SkImageDecoder_libgif.cpp \
 	src/images/SkImageDecoder_libjpeg.cpp \
 	src/images/SkImageDecoder_libpng.cpp \
+	src/images/SkImageDecoder_libwebp.cpp \
 	src/images/SkImageDecoder_libico.cpp \
 	src/images/SkImageDecoder_wbmp.cpp \
 	src/images/SkImageEncoder.cpp \
@@ -240,26 +249,30 @@ LOCAL_SHARED_LIBRARIES := \
         libemoji \
         libjpeg \
         libutils \
+        libdl \
         libz
 
 LOCAL_STATIC_LIBRARIES := \
-        libft2 \
-        libpng \
-        libgif
+	libft2 \
+	libpng \
+	libgif \
+	libwebp-decode \
+	libwebp-encode
 
 LOCAL_C_INCLUDES += \
-        $(LOCAL_PATH)/src/core \
-        $(LOCAL_PATH)/include/core \
-        $(LOCAL_PATH)/include/effects \
-        $(LOCAL_PATH)/include/images \
-        $(LOCAL_PATH)/include/utils \
-        $(LOCAL_PATH)/include/xml \
-        external/freetype/include \
-        external/zlib \
-        external/libpng \
-        external/giflib \
-        external/jpeg \
-        frameworks/opt/emoji
+	$(LOCAL_PATH)/src/core \
+	$(LOCAL_PATH)/include/core \
+	$(LOCAL_PATH)/include/effects \
+	$(LOCAL_PATH)/include/images \
+	$(LOCAL_PATH)/include/utils \
+	$(LOCAL_PATH)/include/xml \
+	external/freetype/include \
+	external/zlib \
+	external/libpng \
+	external/giflib \
+	external/jpeg \
+	external/webp/include \
+	frameworks/opt/emoji
 
 ifeq ($(NO_FALLBACK_FONT),true)
         LOCAL_CFLAGS += -DNO_FALLBACK_FONT

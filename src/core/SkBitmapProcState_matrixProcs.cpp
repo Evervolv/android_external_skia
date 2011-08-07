@@ -6,9 +6,9 @@
 #include "SkUtils.h"
 
 /*  returns 0...(n-1) given any x (positive or negative).
-    
+
     As an example, if n (which is always positive) is 5...
- 
+
           x: -8 -7 -6 -5 -4 -3 -2 -1  0  1  2  3  4  5  6  7  8
     returns:  2  3  4  0  1  2  3  4  0  1  2  3  4  0  1  2  3
  */
@@ -61,6 +61,11 @@ void decal_filter_scale(uint32_t dst[], SkFixed fx, SkFixed dx, int count);
 #define TILEY_PROCF(fy, max)    (tileProcY(fy) * ((max) + 1) >> 16)
 #define TILEX_LOW_BITS(fx, max) ((tileProcX(fx) * ((max) + 1) >> 12) & 0xF)
 #define TILEY_LOW_BITS(fy, max) ((tileProcY(fy) * ((max) + 1) >> 12) & 0xF)
+
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 #include "SkBitmapProcState_matrix.h"
 
 static inline U16CPU fixed_clamp(SkFixed x)
@@ -119,10 +124,16 @@ static inline U16CPU int_clamp(int x, int n) {
         }
     }
 #endif
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return x;
 }
 
 static inline U16CPU int_repeat(int x, int n) {
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return sk_int_mod(x, n);
 }
 
@@ -131,6 +142,9 @@ static inline U16CPU int_mirror(int x, int n) {
     if (x >= n) {
         x = n + ~(x - n);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return x;
 }
 
@@ -148,6 +162,9 @@ static SkBitmapProcState::IntTileProc choose_int_tile_proc(unsigned tm) {
     if (SkShader::kRepeat_TileMode == tm)
         return int_repeat;
     SkASSERT(SkShader::kMirror_TileMode == tm);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return int_mirror;
 }
 
@@ -217,6 +234,9 @@ void decal_nofilter_scale(uint32_t dst[], SkFixed fx, SkFixed dx, int count)
     for (i = count; i > 0; --i) {
         *xx++ = SkToU16(fx >> 16); fx += dx;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 void decal_filter_scale(uint32_t dst[], SkFixed fx, SkFixed dx, int count)
@@ -274,6 +294,9 @@ void decal_filter_scale(uint32_t dst[], SkFixed fx, SkFixed dx, int count)
         *dst++ = (fx >> 12 << 14) | ((fx >> 16) + 1);
         fx += dx;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -309,6 +332,9 @@ static void fill_sequential(uint16_t xptr[], int start, int count) {
         *xptr++ = start++;
     }
 #endif
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static int nofilter_trans_preamble(const SkBitmapProcState& s, uint32_t** xy,
@@ -320,6 +346,9 @@ static int nofilter_trans_preamble(const SkBitmapProcState& s, uint32_t** xy,
                            s.fBitmap->height());
     *xy += 1;   // bump the ptr
     // return our starting X position
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return SkScalarToFixed(pt.fX) >> 16;
 }
 
@@ -328,13 +357,16 @@ void clampx_nofilter_trans(const SkBitmapProcState& s,
     SkASSERT((s.fInvType & ~SkMatrix::kTranslate_Mask) == 0);
 
     int xpos = nofilter_trans_preamble(s, &xy, x, y);
-    const int width = s.fBitmap->width();    
+    const int width = s.fBitmap->width();
     if (1 == width) {
         // all of the following X values must be 0
         memset(xy, 0, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
-    
+
     uint16_t* xptr = reinterpret_cast<uint16_t*>(xy);
     int n;
 
@@ -369,6 +401,9 @@ void clampx_nofilter_trans(const SkBitmapProcState& s,
 
     // fill the remaining with the max value
     sk_memset16(xptr, width - 1, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void repeatx_nofilter_trans(const SkBitmapProcState& s,
@@ -376,10 +411,13 @@ static void repeatx_nofilter_trans(const SkBitmapProcState& s,
     SkASSERT((s.fInvType & ~SkMatrix::kTranslate_Mask) == 0);
 
     int xpos = nofilter_trans_preamble(s, &xy, x, y);
-    const int width = s.fBitmap->width();    
+    const int width = s.fBitmap->width();
     if (1 == width) {
         // all of the following X values must be 0
         memset(xy, 0, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
 
@@ -402,6 +440,9 @@ static void repeatx_nofilter_trans(const SkBitmapProcState& s,
     if (count > 0) {
         fill_sequential(xptr, 0, count);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void fill_backwards(uint16_t xptr[], int pos, int count) {
@@ -409,6 +450,9 @@ static void fill_backwards(uint16_t xptr[], int pos, int count) {
         SkASSERT(pos >= 0);
         xptr[i] = pos--;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void mirrorx_nofilter_trans(const SkBitmapProcState& s,
@@ -416,10 +460,13 @@ static void mirrorx_nofilter_trans(const SkBitmapProcState& s,
     SkASSERT((s.fInvType & ~SkMatrix::kTranslate_Mask) == 0);
 
     int xpos = nofilter_trans_preamble(s, &xy, x, y);
-    const int width = s.fBitmap->width();    
+    const int width = s.fBitmap->width();
     if (1 == width) {
         // all of the following X values must be 0
         memset(xy, 0, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
 
@@ -447,7 +494,7 @@ static void mirrorx_nofilter_trans(const SkBitmapProcState& s,
     forward = !forward;
     xptr += n;
     count -= n;
-    
+
     while (count >= width) {
         if (forward) {
             fill_sequential(xptr, 0, width);
@@ -458,7 +505,7 @@ static void mirrorx_nofilter_trans(const SkBitmapProcState& s,
         xptr += width;
         count -= width;
     }
-    
+
     if (count > 0) {
         if (forward) {
             fill_sequential(xptr, 0, count);
@@ -466,6 +513,9 @@ static void mirrorx_nofilter_trans(const SkBitmapProcState& s,
             fill_backwards(xptr, width - 1, count);
         }
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -479,14 +529,23 @@ SkBitmapProcState::chooseMatrixProc(bool trivial_matrix) {
         fIntTileProcY = choose_int_tile_proc(fTileModeY);
         switch (fTileModeX) {
             case SkShader::kClamp_TileMode:
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+                VFP_NOP;
+#endif
                 return clampx_nofilter_trans;
             case SkShader::kRepeat_TileMode:
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+                VFP_NOP;
+#endif
                 return repeatx_nofilter_trans;
             case SkShader::kMirror_TileMode:
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+                VFP_NOP;
+#endif
                 return mirrorx_nofilter_trans;
         }
     }
-    
+
     int index = 0;
     if (fDoFilter) {
         index = 1;
@@ -496,28 +555,37 @@ SkBitmapProcState::chooseMatrixProc(bool trivial_matrix) {
     } else if (fInvType & SkMatrix::kAffine_Mask) {
         index += 2;
     }
-    
+
     if (SkShader::kClamp_TileMode == fTileModeX &&
         SkShader::kClamp_TileMode == fTileModeY)
     {
         // clamp gets special version of filterOne
         fFilterOneX = SK_Fixed1;
         fFilterOneY = SK_Fixed1;
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return ClampX_ClampY_Procs[index];
     }
-    
+
     // all remaining procs use this form for filterOne
     fFilterOneX = SK_Fixed1 / fBitmap->width();
     fFilterOneY = SK_Fixed1 / fBitmap->height();
-    
+
     if (SkShader::kRepeat_TileMode == fTileModeX &&
         SkShader::kRepeat_TileMode == fTileModeY)
     {
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return RepeatX_RepeatY_Procs[index];
     }
-    
+
     fTileProcX = choose_tile_proc(fTileModeX);
     fTileProcY = choose_tile_proc(fTileModeY);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
     return GeneralXY_Procs[index];
 }
 

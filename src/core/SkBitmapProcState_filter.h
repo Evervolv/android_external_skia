@@ -31,6 +31,10 @@
     the drawing pipeline may rely on this (e.g. which blitrow proc to use).
  */
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 #if defined(__ARM_HAVE_NEON) && !defined(SK_CPU_BENDIAN)
 static inline void Filter_32_opaque_neon(unsigned x, unsigned y, 
                                     SkPMColor a00, SkPMColor a01,
@@ -63,6 +67,10 @@ static inline void Filter_32_opaque_neon(unsigned x, unsigned y,
                  : [x] "r" (x), [y] "r" (y), [a00] "r" (a00), [a01] "r" (a01), [a10] "r" (a10), [a11] "r" (a11), [dst] "r" (dst)
                  : "cc", "memory", "r4", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d16"
                  );
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
+
 }
 
 static inline void Filter_32_alpha_neon(unsigned x, unsigned y,
@@ -99,6 +107,9 @@ static inline void Filter_32_alpha_neon(unsigned x, unsigned y,
                  : [x] "r" (x), [y] "r" (y), [a00] "r" (a00), [a01] "r" (a01), [a10] "r" (a10), [a11] "r" (a11), [dst] "r" (dst), [scale] "r" (scale)
                  : "cc", "memory", "r4", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d16"
                  );
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 #define Filter_32_opaque    Filter_32_opaque_neon
 #define Filter_32_alpha     Filter_32_alpha_neon
@@ -129,6 +140,9 @@ static inline void Filter_32_opaque_portable(unsigned x, unsigned y,
     hi += ((a11 >> 8) & mask) * xy;
     
     *dstColor = ((lo >> 8) & mask) | (hi & ~mask);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static inline void Filter_32_alpha_portable(unsigned x, unsigned y,
@@ -162,6 +176,9 @@ static inline void Filter_32_alpha_portable(unsigned x, unsigned y,
     hi = ((hi >> 8) & mask) * alphaScale;
 
     *dstColor = ((lo >> 8) & mask) | (hi & ~mask);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 #define Filter_32_opaque    Filter_32_opaque_portable
 #define Filter_32_alpha     Filter_32_alpha_portable

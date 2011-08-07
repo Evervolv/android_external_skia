@@ -37,6 +37,11 @@ extern "C" {
 
 // Key to lookup the size of memory buffer set in system property
 static const char KEY_MEM_CAP[] = "ro.media.dec.jpeg.memcap";
+
+#ifdef OMAP_ENHANCEMENT
+static int usingHW=0;
+#endif
+
 #endif
 
 // this enables timing code to report milliseconds for an encode
@@ -277,7 +282,12 @@ bool SkJPEGImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
 #endif
 
     if (sampleSize == 1 && mode == SkImageDecoder::kDecodeBounds_Mode) {
+#ifdef OMAP_ENHANCEMENT
+    if(!usingHW)
+#endif
+    {
         bm->setConfig(config, cinfo.image_width, cinfo.image_height);
+    }
         bm->setIsOpaque(true);
         return true;
     }
@@ -300,7 +310,12 @@ bool SkJPEGImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
                 valid_output_dimensions(cinfo)) {
             SkScaledBitmapSampler smpl(cinfo.output_width, cinfo.output_height,
                                        recompute_sampleSize(sampleSize, cinfo));
+#ifdef OMAP_ENHANCEMENT
+        if(!usingHW)
+#endif
+        {
             bm->setConfig(config, smpl.scaledWidth(), smpl.scaledHeight());
+        }
             bm->setIsOpaque(true);
             return true;
         } else {
@@ -325,7 +340,12 @@ bool SkJPEGImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
         (config == SkBitmap::kRGB_565_Config && 
                 cinfo.out_color_space == JCS_RGB_565)))
     {
+#ifdef OMAP_ENHANCEMENT
+        if(!usingHW)
+#endif
+    {
         bm->setConfig(config, cinfo.output_width, cinfo.output_height);
+    }
         bm->setIsOpaque(true);
         if (SkImageDecoder::kDecodeBounds_Mode == mode) {
             return true;
@@ -373,8 +393,12 @@ bool SkJPEGImageDecoder::onDecode(SkStream* stream, SkBitmap* bm, Mode mode) {
 
     SkScaledBitmapSampler sampler(cinfo.output_width, cinfo.output_height,
                                   sampleSize);
-
+#ifdef OMAP_ENHANCEMENT
+    if(!usingHW)
+#endif
+    {
     bm->setConfig(config, sampler.scaledWidth(), sampler.scaledHeight());
+    }
     // jpegs are always opauqe (i.e. have no per-pixel alpha)
     bm->setIsOpaque(true);
 
@@ -910,6 +934,19 @@ protected:
 
 #include "SkTRegistry.h"
 
+#ifdef OMAP_ENHANCEMENT
+#include <dlfcn.h>
+
+#ifdef TARGET_OMAP4
+#define HW_JPEGDEC_CODEC_LIBRARY "libskiahwdec.so"
+#define HW_JPEGENC_CODEC_LIBRARY "libskiahwenc.so"
+#else
+#define HW_JPEGDEC_CODEC_LIBRARY "libskiahw.so"
+#define HW_JPEGENC_CODEC_LIBRARY "libskiahw.so"
+#endif
+
+#endif
+
 static SkImageDecoder* DFactory(SkStream* stream) {
     static const char gHeader[] = { 0xFF, 0xD8, 0xFF };
     static const size_t HEADER_SIZE = sizeof(gHeader);
@@ -917,16 +954,105 @@ static SkImageDecoder* DFactory(SkStream* stream) {
     char buffer[HEADER_SIZE];
     size_t len = stream->read(buffer, HEADER_SIZE);
 
+#ifdef OMAP_ENHANCEMENT
+    char libskia_dec[2] = {'0','\0'};
+    const char set[2] = {'0','\0'};
+    char cImageDecSizeThreshold[]="0000000000";
+    unsigned int Filesize, dImageDecSizeThreshold;
+    static void *mLibHandle = NULL;
+    Filesize = stream->getLength();
+    property_get("jpeg.libskiahw.decoder.enable", libskia_dec, "0");
+    property_get("jpeg.libskiahw.decoder.thresh", cImageDecSizeThreshold, "0");
+    dImageDecSizeThreshold = atoi(cImageDecSizeThreshold);
+#endif
+
     if (len != HEADER_SIZE) {
         return NULL;   // can't read enough
     }
     if (memcmp(buffer, gHeader, HEADER_SIZE)) {
         return NULL;
     }
+
+#ifdef OMAP_ENHANCEMENT
+    if (strcmp(libskia_dec, set) != 0)
+    {
+      // Attempt to load the HW jpeg decoder only if the image file size if more than the threshold
+        if (Filesize > dImageDecSizeThreshold)
+        {
+            SkDebugf("Threshold crossed. Attempting to load HW decoder...\n");
+            mLibHandle = ::dlopen(HW_JPEGDEC_CODEC_LIBRARY, RTLD_NOW);
+            if( mLibHandle == NULL ) {
+                SkDebugf ("Failed to load %s because %s", HW_JPEGENC_CODEC_LIBRARY, dlerror());
+            }
+            else SkDebugf ("Loaded %s", HW_JPEGDEC_CODEC_LIBRARY);
+        }
+        else
+        {
+            SkDebugf("Loading ARM decoder...\n");
+            usingHW=0;
+            mLibHandle = NULL;
+        }
+     } else {
+        SkDebugf("Loading ARM decoder...\n");
+        usingHW=0;
+        mLibHandle = NULL;
+    }
+
+    if (mLibHandle != NULL){
+        typedef SkImageDecoder* (*HWJpegDecFactory)();
+        HWJpegDecFactory f = (HWJpegDecFactory) ::dlsym(mLibHandle, "SkImageDecoder_HWJPEG_Factory");
+        if (f != NULL) {
+            SkDebugf("\n\n####### Loaded Hardware Specific Jpeg Decoder Codec #######\n\n");
+            usingHW=1;
+            return f();
+        }
+        SkDebugf("Unable to Load Hardware Specific Jpeg Decoder Codec because: %s", dlerror());
+    }
+#endif
+
     return SkNEW(SkJPEGImageDecoder);
 }
 
 static SkImageEncoder* EFactory(SkImageEncoder::Type t) {
+#ifdef OMAP_ENHANCEMENT
+     static void *mLibHandle = NULL;
+     char libskiahw_enc[2] = {'0','\0'};
+     const char set[2] = {'0','\0'};
+     char cImageEncSizeThreshold[]="0000000000";
+     property_get("jpeg.libskiahw.encoder.enable", libskiahw_enc, "0");
+
+    if (SkImageEncoder::kJPEG_Type != t) return NULL;
+
+    if (strcmp(libskiahw_enc, set) != 0)
+    {
+         //Attempt to load libskiahwenc only if the jpeg.libskiahw.encoder property is set to 1
+         SkDebugf("Attempting to load HW encoder...\n");
+         mLibHandle = ::dlopen(HW_JPEGENC_CODEC_LIBRARY, RTLD_NOW);
+         if( mLibHandle == NULL ) {
+             SkDebugf ("Failed to load %s because %s", HW_JPEGENC_CODEC_LIBRARY, dlerror());
+         }
+         else
+             SkDebugf ("Loaded %s.",HW_JPEGENC_CODEC_LIBRARY);
+    }
+    else
+    {
+        SkDebugf("Loading ARM encoder...\n");
+        mLibHandle = NULL;
+    }
+
+    if (mLibHandle != NULL){
+        typedef SkImageEncoder* (*HWJpegEncFactory)();
+        HWJpegEncFactory f = (HWJpegEncFactory) ::dlsym(mLibHandle, "SkImageEncoder_HWJPEG_Factory");
+        if (f != NULL) {
+            SkDebugf("\n\n####### Loaded Hardware Specific Jpeg Encoder Codec #######\n\n");
+            return f();
+        }
+        SkDebugf("Unable to Load Hardware Specific Jpeg Encoder Codec because: %s", dlerror());
+    }
+
+    // if no device-specific codec was loaded, use the generic one
+#endif
+
     return (SkImageEncoder::kJPEG_Type == t) ? SkNEW(SkJPEGImageEncoder) : NULL;
 }
 

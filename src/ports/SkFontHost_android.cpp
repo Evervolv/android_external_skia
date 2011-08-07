@@ -25,7 +25,12 @@
 #include "SkTSearch.h"
 #include <stdio.h>
 
+// Added larger cache memory for large memory devices
+#ifdef ANDROID_LARGE_MEMORY_DEVICE
+#define FONT_CACHE_MEMORY_BUDGET    (1536 * 1024)
+#else
 #define FONT_CACHE_MEMORY_BUDGET    (768 * 1024)
+#endif
 
 #ifndef SK_FONT_FILE_PREFIX
     #define SK_FONT_FILE_PREFIX          "/fonts/"

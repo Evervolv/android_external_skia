@@ -163,10 +163,16 @@ bool SkImageDecoder::decode(SkStream* stream, SkBitmap* bm,
     // assign this, for use by getPrefConfig(), in case fUsePrefTable is false
     fDefaultPref = pref;
 
+#ifdef OMAP_ENHANCEMENT
+    if (!this->onDecode(stream, bm, mode)) {
+        return false;
+    }
+#else
     if (!this->onDecode(stream, &tmp, mode)) {
         return false;
     }
     bm->swap(tmp);
+#endif
     return true;
 }
 

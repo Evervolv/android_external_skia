@@ -52,6 +52,10 @@
     #define PREAMBLE_ARG_Y
 #endif
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
                                 uint32_t xy[], int count, int x, int y) {
     SkASSERT((s.fInvType & ~(SkMatrix::kTranslate_Mask |
@@ -75,6 +79,9 @@ static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
     if (0 == maxX) {
         // all of the following X values must be 0
         memset(xy, 0, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
 
@@ -176,6 +183,9 @@ static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
             *xx++ = TILEX_PROCF(fx, maxX); fx += dx;
         }
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 // note: we could special-case on a matrix which is skewed in X but not Y.
@@ -301,6 +311,9 @@ static void AFFINE_NOFILTER_NAME(const SkBitmapProcState& s,
         *xy++ = (TILEY_PROCF(fy, maxY) << 16) | TILEX_PROCF(fx, maxX);
         fx += dx; fy += dy;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void PERSP_NOFILTER_NAME(const SkBitmapProcState& s,
@@ -419,6 +432,9 @@ static void PERSP_NOFILTER_NAME(const SkBitmapProcState& s,
             srcXY += 2;
         }
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -476,6 +492,9 @@ static void SCALE_FILTER_NAME(const SkBitmapProcState& s,
             fx += dx;
         } while (--count != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
@@ -506,6 +525,9 @@ static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
         *xy++ = PACK_FILTER_X_NAME(fx, maxX, oneX PREAMBLE_ARG_X);
         fx += dx;
     } while (--count != 0);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
@@ -537,6 +559,9 @@ static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
             srcXY += 2;
         } while (--count != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static SkBitmapProcState::MatrixProc MAKENAME(_Procs)[] = {

@@ -30,6 +30,16 @@ class SkRegion;
 class SkFlattenableReadBuffer;
 class SkFlattenableWriteBuffer;
 
+#ifdef OMAP_ENHANCEMENT
+typedef struct S3D_DESC_INFO {
+        unsigned char nType;
+        unsigned char nLayout;
+        unsigned char nSubSampling;//Misc Flag
+        unsigned char nFrameOrder;//Misc Flag
+        unsigned char nSeparation;
+    } S3D_DESC_INFO;
+#endif
+
 /** \class SkBitmap
 
     The SkBitmap class specifies a raster bitmap. A bitmap has an integer width
@@ -177,6 +187,14 @@ public:
         any pixel/colortable ownership, just like reset().
     */
     void setConfig(Config, int width, int height, int rowBytes = 0);
+#ifdef OMAP_ENHANCEMENT
+    /*
+       Overloaded S3D function to Set the bitmap's Framelayout type as well
+       to be passed to the display framework, default values are 2D.
+    */
+    void setConfig(Config, int width, int height, S3D_DESC_INFO frame, int rowBytes = 0);
+#endif
+
     /** Use this to assign a new pixel address for an existing bitmap. This
         will automatically release any pixelref previously installed. Only call
         this if you are handling ownership/lifetime of the pixel memory.
@@ -450,6 +468,9 @@ public:
     };
 
 private:
+#ifdef OMAP_ENHANCEMENT
+    S3D_DESC_INFO jpsHeader;
+#endif
     struct MipMap;
     mutable MipMap* fMipMap;
 

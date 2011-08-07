@@ -1,6 +1,6 @@
 /* NEON optimized code (C) COPYRIGHT 2009 Motorola */
 /*
- * Modifications done in-house at Motorola 
+ * Modifications done in-house at Motorola
  *
  * this is a clone of SkBitmapProcState_matrix.h
  * and has been tuned to work with the NEON unit.
@@ -54,6 +54,9 @@
     #define PREAMBLE_ARG_Y
 #endif
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
 static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
                                 uint32_t xy[], int count, int x, int y) {
     SkASSERT((s.fInvType & ~(SkMatrix::kTranslate_Mask |
@@ -73,10 +76,13 @@ static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
         *xy++ = TILEY_PROCF(fx, maxY);
         fx = SkScalarToFixed(pt.fX);
     }
-    
+
     if (0 == maxX) {
         // all of the following X values must be 0
         memset(xy, 0, count * sizeof(uint16_t));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
 
@@ -87,6 +93,9 @@ static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
     if ((unsigned)(fx >> 16) <= maxX &&
         (unsigned)((fx + dx * (count - 1)) >> 16) <= maxX) {
         decal_nofilter_scale(xy, fx, dx, count);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
         return;
     }
 #endif
@@ -154,6 +163,10 @@ static void SCALE_NOFILTER_NAME(const SkBitmapProcState& s,
     for (i = count; i > 0; --i) {
         *xx++ = TILEX_PROCF(fx, maxX); fx += dx;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
+
 }
 
 // note: we could special-case on a matrix which is skewed in X but not Y.
@@ -166,20 +179,20 @@ static void AFFINE_NOFILTER_NAME(const SkBitmapProcState& s,
     SkASSERT((s.fInvType & ~(SkMatrix::kTranslate_Mask |
                              SkMatrix::kScale_Mask |
                              SkMatrix::kAffine_Mask)) == 0);
-    
+
     PREAMBLE(s);
     SkPoint srcPt;
     s.fInvProc(*s.fInvMatrix,
                SkIntToScalar(x) + SK_ScalarHalf,
                SkIntToScalar(y) + SK_ScalarHalf, &srcPt);
-    
+
     SkFixed fx = SkScalarToFixed(srcPt.fX);
     SkFixed fy = SkScalarToFixed(srcPt.fY);
     SkFixed dx = s.fInvSx;
     SkFixed dy = s.fInvKy;
     int maxX = s.fBitmap->width() - 1;
     int maxY = s.fBitmap->height() - 1;
-    
+
     /* NEON lets us do an 8x unrolling */
     if (count >= 8) {
         /* SkFixed is 16.16 fixed point */
@@ -268,6 +281,9 @@ static void AFFINE_NOFILTER_NAME(const SkBitmapProcState& s,
         *xy++ = (TILEY_PROCF(fy, maxY) << 16) | TILEX_PROCF(fx, maxX);
         fx += dx; fy += dy;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #undef	DEBUG_PERSP_NOFILTER
@@ -276,16 +292,16 @@ static void PERSP_NOFILTER_NAME(const SkBitmapProcState& s,
                                 uint32_t* SK_RESTRICT xy,
                                 int count, int x, int y) {
     SkASSERT(s.fInvType & SkMatrix::kPerspective_Mask);
-    
+
     PREAMBLE(s);
     /* max{X,Y} are int here, but later shown/assumed to fit in 16 bits */
     int maxX = s.fBitmap->width() - 1;
     int maxY = s.fBitmap->height() - 1;
-    
+
     SkPerspIter   iter(*s.fInvMatrix,
                        SkIntToScalar(x) + SK_ScalarHalf,
                        SkIntToScalar(y) + SK_ScalarHalf, count);
-    
+
     while ((count = iter.next()) != 0) {
         const SkFixed* SK_RESTRICT srcXY = iter.getXY();
 
@@ -318,7 +334,7 @@ static void PERSP_NOFILTER_NAME(const SkBitmapProcState& s,
 	    /* The constructs with local blocks for register assignments
 	     * and asm() instructions is to make keep any hard register
 	     * assignments to as small a scope as possible. and to avoid
-	     * burning call-preserved hard registers on the vld/vst 
+	     * burning call-preserved hard registers on the vld/vst
 	     * instructions.
 	     */
 
@@ -461,26 +477,26 @@ static void PERSP_NOFILTER_NAME(const SkBitmapProcState& s,
 	}
 #endif
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #undef	DEBUG_PERSP_NOFILTER
 
 //////////////////////////////////////////////////////////////////////////////
-
 static inline uint32_t PACK_FILTER_Y_NAME(SkFixed f, unsigned max,
                                           SkFixed one PREAMBLE_PARAM_Y) {
     unsigned i = TILEY_PROCF(f, max);
     i = (i << 4) | TILEY_LOW_BITS(f, max);
     return (i << 14) | (TILEY_PROCF((f + one), max));
 }
-
 static inline uint32_t PACK_FILTER_X_NAME(SkFixed f, unsigned max,
                                           SkFixed one PREAMBLE_PARAM_X) {
     unsigned i = TILEX_PROCF(f, max);
     i = (i << 4) | TILEX_LOW_BITS(f, max);
     return (i << 14) | (TILEX_PROCF((f + one), max));
 }
-
 static void SCALE_FILTER_NAME(const SkBitmapProcState& s,
                               uint32_t xy[], int count, int x, int y) {
     SkASSERT((s.fInvType & ~(SkMatrix::kTranslate_Mask |
@@ -488,7 +504,7 @@ static void SCALE_FILTER_NAME(const SkBitmapProcState& s,
     SkASSERT(s.fInvKy == 0);
 
     PREAMBLE(s);
-    
+
     const unsigned maxX = s.fBitmap->width() - 1;
     const SkFixed one = s.fFilterOneX;
     const SkFixed dx = s.fInvSx;
@@ -533,7 +549,7 @@ static void SCALE_FILTER_NAME(const SkBitmapProcState& s,
         wide_one = vdupq_n_s32(one);
 
         while (count >= 4) {
-            /* original expands to: 
+            /* original expands to:
              * unsigned i = SkClampMax((f) >> 16, max);
              * i = (i << 4) | (((f) >> 12) & 0xF);
              * return (i << 14) | (SkClampMax(((f + one)) >> 16, max));
@@ -586,26 +602,28 @@ static void SCALE_FILTER_NAME(const SkBitmapProcState& s,
             count -= 4;
         }
     }
-   
+
     while (--count >= 0) {
         *xy++ = PACK_FILTER_X_NAME(fx, maxX, one PREAMBLE_ARG_X);
         fx += dx;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
-
 static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
                                uint32_t xy[], int count, int x, int y) {
     SkASSERT(s.fInvType & SkMatrix::kAffine_Mask);
     SkASSERT((s.fInvType & ~(SkMatrix::kTranslate_Mask |
                              SkMatrix::kScale_Mask |
                              SkMatrix::kAffine_Mask)) == 0);
-    
+
     PREAMBLE(s);
     SkPoint srcPt;
     s.fInvProc(*s.fInvMatrix,
                SkIntToScalar(x) + SK_ScalarHalf,
                SkIntToScalar(y) + SK_ScalarHalf, &srcPt);
-    
+
     SkFixed oneX = s.fFilterOneX;
     SkFixed oneY = s.fFilterOneY;
     SkFixed fx = SkScalarToFixed(srcPt.fX) - (oneX >> 1);
@@ -614,7 +632,7 @@ static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
     SkFixed dy = s.fInvKy;
     unsigned maxX = s.fBitmap->width() - 1;
     unsigned maxY = s.fBitmap->height() - 1;
-    
+
     if (count >= 4) {
         int32x4_t wide_one, wide_i, wide_lo;
         int32x4_t wide_dx, wide_fx, wide_onex, wide_fx1;
@@ -649,7 +667,7 @@ static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
 
             /* do the X side, then the Y side, then interleave them */
 
-            /* original expands to: 
+            /* original expands to:
              * unsigned i = SkClampMax((f) >> 16, max);
              * i = (i << 4) | (((f) >> 12) & 0xF);
              * return (i << 14) | (SkClampMax(((f + one)) >> 16, max));
@@ -752,6 +770,9 @@ static void AFFINE_FILTER_NAME(const SkBitmapProcState& s,
         *xy++ = PACK_FILTER_X_NAME(fx, maxX, oneX PREAMBLE_ARG_X);
         fx += dx;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
@@ -798,7 +819,7 @@ static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
 
                 wide_x = vsubq_s32(wide_x, vdupq_n_s32 (oneX>>1));
 
-                /* original expands to: 
+                /* original expands to:
                  * unsigned i = SkClampMax((f) >> 16, max);
                  * i = (i << 4) | (((f) >> 12) & 0xF);
                  * return (i << 14) | (SkClampMax(((f + one)) >> 16, max));
@@ -875,7 +896,7 @@ static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
         }
 
         /* was do-while; NEON code invalidates original count>0 assumption */
-        while (--count >= 0) { 
+        while (--count >= 0) {
 	    /* NB: we read x/y, we write y/x */
             *xy++ = PACK_FILTER_Y_NAME(srcXY[1] - (oneY >> 1), maxY,
                                        oneY PREAMBLE_ARG_Y);
@@ -884,6 +905,9 @@ static void PERSP_FILTER_NAME(const SkBitmapProcState& s,
             srcXY += 2;
         }
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 static SkBitmapProcState::MatrixProc MAKENAME(_Procs)[] = {

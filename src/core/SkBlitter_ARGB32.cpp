@@ -21,6 +21,10 @@
 #include "SkUtils.h"
 #include "SkXfermode.h"
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+#define  VFP_NOP asm volatile ( "vmov s0,s0\n" )
+#endif
+
 #if defined(SK_SUPPORT_LCDTEXT)
 namespace skia_blitter_support {
 // subpixel helper functions from SkBlitter_ARGB32_Subpixel.cpp
@@ -148,11 +152,17 @@ void SkARGB32_Blitter::blitMask(const SkMask& mask, const SkIRect& clip) {
     SkASSERT(fSrcA != 0xFF);
 
     if (fSrcA == 0) {
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
         return;
     }
 
     if (mask.fFormat == SkMask::kBW_Format) {
         SkARGB32_BlendBW(fDevice, mask, clip, fPMColor, SkAlpha255To256(255 - fSrcA));
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
         return;
     }
 
@@ -177,6 +187,9 @@ void SkARGB32_Blitter::blitMask(const SkMask& mask, const SkIRect& clip) {
         device = (uint32_t*)((char*)device + devRB);
         alpha += maskRB;
     } while (--height != 0);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
 }
 
 void SkARGB32_Opaque_Blitter::blitMask(const SkMask& mask,
@@ -185,6 +198,9 @@ void SkARGB32_Opaque_Blitter::blitMask(const SkMask& mask,
 
     if (mask.fFormat == SkMask::kBW_Format) {
         SkARGB32_BlitBW(fDevice, mask, clip, fPMColor);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
         return;
     }
 
@@ -224,6 +240,9 @@ void SkARGB32_Opaque_Blitter::blitMask(const SkMask& mask,
             alpha32 += alphaExtraRowWords;
         } while (--height != 0);
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+        VFP_NOP;
+#endif
         return;
     }
 #endif
@@ -242,6 +261,9 @@ void SkARGB32_Opaque_Blitter::blitMask(const SkMask& mask,
         device = (uint32_t*)((char*)device + devRB);
         alpha += maskRB;
     } while (--height != 0);
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
@@ -272,6 +294,9 @@ void SkARGB32_Blitter::blitV(int x, int y, int height, SkAlpha alpha) {
         device[0] = result;
         device = (uint32_t*)((char*)device + rowBytes);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 void SkARGB32_Blitter::blitRect(int x, int y, int width, int height) {
@@ -289,6 +314,9 @@ void SkARGB32_Blitter::blitRect(int x, int y, int width, int height) {
         SkBlitRow::Color32(device, width, color);
         device = (uint32_t*)((char*)device + rowBytes);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 #if defined _WIN32 && _MSC_VER >= 1300
@@ -340,6 +368,9 @@ void SkARGB32_Black_Blitter::blitMask(const SkMask& mask, const SkIRect& clip) {
                 alpha32 += alphaExtraRowWords;
             } while (--height != 0);
 
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+            VFP_NOP;
+#endif
             return;
         }
 #endif
@@ -359,6 +390,9 @@ void SkARGB32_Black_Blitter::blitMask(const SkMask& mask, const SkIRect& clip) {
             alpha += maskRB;
         } while (--height != 0);
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 void SkARGB32_Black_Blitter::blitAntiH(int x, int y, const SkAlpha antialias[],
@@ -370,6 +404,9 @@ void SkARGB32_Black_Blitter::blitAntiH(int x, int y, const SkAlpha antialias[],
         int count = runs[0];
         SkASSERT(count >= 0);
         if (count <= 0) {
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+            VFP_NOP;
+#endif
             return;
         }
         unsigned aa = antialias[0];
@@ -390,6 +427,9 @@ void SkARGB32_Black_Blitter::blitAntiH(int x, int y, const SkAlpha antialias[],
         antialias += count;
         device += count;
     }
+#ifdef NEEDS_ARM_ERRATA_754319_754320
+    VFP_NOP;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////

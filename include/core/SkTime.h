@@ -68,5 +68,59 @@ private:
     SkMSec      fMinToDump;
 };
 
+#ifdef OMAP_ENHANCEMENT
+class AutoTimeMicros {
+public:
+    AutoTimeMicros(const char label[]) : fLabel(label) {
+        if (!fLabel) {
+            fLabel = "";
+        }
+        gettimeofday(&fNow, NULL);
+        width = 0;
+        height = 0;
+        scale_factor = -1;
+    }
+    ~AutoTimeMicros() {
+        struct timeval tv;
+        unsigned long timeDiff = 0;
+        char *str = NULL;
+        gettimeofday(&tv, NULL);
+        timeDiff = (unsigned long)((tv.tv_sec - fNow.tv_sec) * 1000000) + (tv.tv_usec - fNow.tv_usec);
+
+        str =(char*) malloc( (strlen(fLabel)+50) );
+        if (str){
+            strcpy(str, fLabel);
+            if(width != 0 && height !=0)
+            {
+                sprintf(str, "%s Input(%d x %d)", str, width, height);
+            }
+            if(scale_factor != -1)
+            {
+                sprintf(str, "%s ScaleFactor(%d)", str, scale_factor);
+            }
+            SkDebugf("---- Time (ms): %s %lu us\n", str, timeDiff);
+            free(str);
+        }
+    }
+
+    void setResolution(int width, int height){
+        this->width=width;
+        this->height=height;
+    }
+
+    void setScaleFactor(int scale_factor){
+        this->scale_factor=scale_factor;
+    }
+
+private:
+    const char* fLabel;
+    struct timeval fNow;
+    int width;
+    int height;
+    int scale_factor;
+};
+
+ ///////////////////////////////////////////////////////////////////////////////
+#endif
 #endif
 
