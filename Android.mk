@@ -217,6 +217,10 @@ endif
 LOCAL_SRC_FILES += \
 	emoji/EmojiFont.cpp
 
+ifeq ($(ARCH_ARM_HAVE_NEON),true)
+	LOCAL_SRC_FILES += \
+		src/opts/S16_D32_arm.S
+endif
 
 # including the optimized assembly code for the src-overing operation
 ifeq ($(TARGET_ARCH),arm)

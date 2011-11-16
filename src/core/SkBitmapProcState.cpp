@@ -121,7 +121,9 @@ static inline U8CPU Filter_8(unsigned x, unsigned y,
                                 SkASSERT(state.fAlphaScale == 256)
 #define RETURNDST(src)          SkPixel16ToPixel32(src)
 #define SRC_TO_FILTER(src)      src
+#define USE_S16_OPAQUE
 #include "SkBitmapProcState_sample.h"
+#undef  USE_S16_OPAQUE
 
 #undef FILTER_PROC
 #define FILTER_PROC(x, y, a, b, c, d, dst) \
