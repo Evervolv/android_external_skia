@@ -1,3 +1,22 @@
+
+/*
+ * Original file from Android Open source project, modified by Code Aurora Forum
+ * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
 #include "SkBitmapProcState.h"
 #include "SkBitmapProcState_filter.h"
 #include "SkColorPriv.h"
@@ -339,6 +358,25 @@ static inline U8CPU Filter_8(unsigned x, unsigned y,
 #define POSTAMBLE(state)        state.fBitmap->getColorTable()->unlockColors(false)
 #include "SkBitmapProcState_shaderproc.h"
 
+#if     defined(__ARM_HAVE_NEON)
+#define TILEX_PROCF(fx, max)    SkClampMax((fx) >> 16, max)
+#define TILEY_PROCF(fy, max)    SkClampMax((fy) >> 16, max)
+#define TILEX_LOW_BITS(fx, max) (((fx) >> 12) & 0xF)
+#define TILEY_LOW_BITS(fy, max) (((fy) >> 12) & 0xF)
+
+#undef FILTER_PROC
+#define FILTER_PROC(x, y, a, b, c, d, dst)   Filter_32_opaque(x, y, a, b, c, d, dst)
+#define MAKENAME(suffix)        S32_Opaque_D32 ## suffix
+#define SRCTYPE                 uint32_t
+#define DSTTYPE                 uint32_t
+#define SRC_TO_FILTER(src)      src
+#include "S32_Opaque_D32_filter_DX_shaderproc_neon.cpp"
+#define S32_OPAQUE_D32_FILTER_DX_NEON
+#include "SkBitmapProcState_shaderproc.h"
+#undef S32_OPAQUE_D32_FILTER_DX_NEON
+#endif //ARM_HAVE_NEON
+
+
 ///////////////////////////////////////////////////////////////////////////////
 
 static bool valid_for_filtering(unsigned dimension) {
@@ -531,6 +569,11 @@ bool SkBitmapProcState::chooseProcs(const SkMatrix& inv, const SkPaint& paint) {
     } else if (SI8_opaque_D32_filter_DX == fSampleProc32 && clamp_clamp) {
         fShaderProc32 = Clamp_SI8_opaque_D32_filter_DX_shaderproc;
     }
+#if     defined(__ARM_HAVE_NEON)
+      else if (S32_opaque_D32_filter_DX == fSampleProc32 && clamp_clamp) {
+        fShaderProc32 = S32_Opaque_D32_filter_DX_shaderproc;
+    }
+#endif //ARM_HAVE_NEON
 
     // see if our platform has any accelerated overrides
     this->platformProcs();
