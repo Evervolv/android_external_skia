@@ -1,3 +1,10 @@
+
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
 #include "Test.h"
 #include "SkBitmap.h"
 #include "SkRect.h"
@@ -301,12 +308,16 @@ static void TestBitmapCopy(skiatest::Reporter* reporter) {
                 }
                 // test extractSubset
                 {
+                    SkBitmap bitmap(src);
                     SkBitmap subset;
                     SkIRect r;
                     r.set(1, 1, 2, 2);
-                    if (src.extractSubset(&subset, r)) {
+                    bitmap.setIsVolatile(true);
+                    if (bitmap.extractSubset(&subset, r)) {
                         REPORTER_ASSERT(reporter, subset.width() == 1);
                         REPORTER_ASSERT(reporter, subset.height() == 1);
+                        REPORTER_ASSERT(reporter,
+                                        subset.isVolatile() == true);
 
                         SkBitmap copy;
                         REPORTER_ASSERT(reporter,
@@ -321,6 +332,11 @@ static void TestBitmapCopy(skiatest::Reporter* reporter) {
                         bool hasCT = subset.getColorTable() != NULL;
                         REPORTER_ASSERT(reporter,
                                     (copy.getColorTable() != NULL) == hasCT);
+                    }
+                    bitmap.setIsVolatile(false);
+                    if (bitmap.extractSubset(&subset, r)) {
+                        REPORTER_ASSERT(reporter,
+                                        subset.isVolatile() == false);
                     }
                 }
             } else {
@@ -543,6 +559,7 @@ static void TestBitmapCopy(skiatest::Reporter* reporter) {
                         reportCopyVerification(subset, bufBm, coords,
                         "copyPixelsTo(buf, bufSize, rowBytes()-1)", reporter);
 
+#if 0   // copyPixelsFrom is gone
                     // Test #5 ////////////////////////////////////////////
                     // Tests the case where the source stride is too small
                     // for the source configuration.
@@ -577,6 +594,7 @@ static void TestBitmapCopy(skiatest::Reporter* reporter) {
                             false);
 
                     delete [] buf;
+#endif
                 }
             }
         } // for (size_t copyCase ...

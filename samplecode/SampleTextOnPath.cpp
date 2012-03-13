@@ -1,3 +1,10 @@
+
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
 #include "SampleCode.h"
 #include "SkView.h"
 #include "SkCanvas.h"
@@ -110,7 +117,7 @@ static void test_textBounds(SkCanvas* canvas) {
     paint.setAntiAlias(true);
     paint.setDevKernText(gDevKern);
     
-    (void)paint.measureText(gText, strlen(gText), &bounds, NULL);
+    (void)paint.measureText(gText, strlen(gText), &bounds);
     paint.setColor(SK_ColorGREEN);
     bounds.offset(x, y);
     canvas->drawRect(bounds, paint);
@@ -281,4 +288,3 @@ static SkView* MyFactory() {
 }
 
 static SkViewRegister reg(MyFactory);
-

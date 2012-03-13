@@ -1,3 +1,10 @@
+
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
 #include "SkImageRef.h"
 #include "SkBitmap.h"
 #include "SkFlattenable.h"
@@ -9,7 +16,7 @@
 //#define DUMP_IMAGEREF_LIFECYCLE
 
 // can't be static, as SkImageRef_Pool needs to see it
-SkMutex gImageRefMutex;
+SK_DECLARE_GLOBAL_MUTEX(gImageRefMutex);
 
 ///////////////////////////////////////////////////////////////////////////////
 

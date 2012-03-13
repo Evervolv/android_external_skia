@@ -1,17 +1,8 @@
 /*
- * Copyright (C) 2010 The Android Open Source Project
+ * Copyright 2010 The Android Open Source Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
 
 /* Changes:
@@ -41,6 +32,14 @@ arm_memset16:
         .fnstart
         push        {lr}
 
+        /* if count is equal to zero then abort */
+        teq         r2, #0
+        ble         .Lfinish
+
+        /* Multiply count by 2 - go from the number of 16-bit shorts
+         * to the number of bytes desired. */
+        mov         r2, r2, lsl #1
+
         /* expand the data to 32 bits */
         orr         r1, r1, lsl #16
 
@@ -49,10 +48,6 @@ arm_memset16:
         strneh      r1, [r0], #2
         subne       r2, r2, #2
 
-        /* Multiply count by 2 - go from the number of 16-bit shorts
-         * to the number of bytes desired. */
-        mov         r2, r2, lsl #1
-
         /* Now jump into the main loop below. */
         b           .Lwork_32
         .fnend
@@ -60,6 +55,10 @@ arm_memset16:
 arm_memset32:
         .fnstart
         push        {lr}
+
+        /* if count is equal to zero then abort */
+        teq         r2, #0
+        ble         .Lfinish
 
         /* Multiply count by 4 - go from the number of 32-bit words to
          * the number of bytes desired. */
@@ -106,5 +105,6 @@ arm_memset32:
         strcs       r1, [r0], #4
         strmih      lr, [r0], #2
 
+.Lfinish:
         pop         {pc}
         .fnend

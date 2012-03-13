@@ -1,4 +1,11 @@
 
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
+
 #include "SampleCode.h"
 #include "SkView.h"
 #include "SkCanvas.h"
@@ -60,7 +67,8 @@ static void test_cubic2() {
         SkIRect ir;
         r.round(&ir);
         printf("[%g %g %g %g] [%x %x %x %x]\n",
-               r.fLeft, r.fTop, r.fRight, r.fBottom,
+               SkScalarToDouble(r.fLeft), SkScalarToDouble(r.fTop),
+               SkScalarToDouble(r.fRight), SkScalarToDouble(r.fBottom),
                ir.fLeft, ir.fTop, ir.fRight, ir.fBottom);
     }
     

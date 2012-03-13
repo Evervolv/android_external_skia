@@ -1,5 +1,11 @@
+
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
 #include "SkPictureRecord.h"
-#include "SkShape.h"
 #include "SkTSearch.h"
 
 #define MIN_WRITER_SIZE 16384
@@ -17,6 +23,7 @@ SkPictureRecord::SkPictureRecord(uint32_t flags) :
     fRestoreOffsetStack.push(0);
 
     fPathHeap = NULL;   // lazy allocate
+    fFirstSavedLayerIndex = kNoSavedLayerIndex;
 }
 
 SkPictureRecord::~SkPictureRecord() {
@@ -44,6 +51,10 @@ int SkPictureRecord::saveLayer(const SkRect* bounds, const SkPaint* paint,
 
     fRestoreOffsetStack.push(0);
 
+    if (kNoSavedLayerIndex == fFirstSavedLayerIndex) {
+        fFirstSavedLayerIndex = fRestoreOffsetStack.count();
+    }
+
     validate();
     /*  Don't actually call saveLayer, because that will try to allocate an
         offscreen device (potentially very big) which we don't actually need
@@ -51,7 +62,13 @@ int SkPictureRecord::saveLayer(const SkRect* bounds, const SkPaint* paint,
         clip starts out the size of the picture, which is often much larger
         than the size of the actual device we'll use during playback).
      */
-    return this->INHERITED::save(flags);
+    int count = this->INHERITED::save(flags);
+    this->clipRectBounds(bounds, flags, NULL);
+    return count;
+}
+
+bool SkPictureRecord::isDrawingToLayer() const {
+    return fFirstSavedLayerIndex != kNoSavedLayerIndex;
 }
 
 void SkPictureRecord::restore() {
@@ -68,6 +85,11 @@ void SkPictureRecord::restore() {
         offset = *peek;
         *peek = restoreOffset;
     }
+
+    if (fRestoreOffsetStack.count() == fFirstSavedLayerIndex) {
+        fFirstSavedLayerIndex = kNoSavedLayerIndex;
+    }
+
     fRestoreOffsetStack.pop();
 
     addDraw(RESTORE);
@@ -122,45 +144,74 @@ void SkPictureRecord::setMatrix(const SkMatrix& matrix) {
     this->INHERITED::setMatrix(matrix);
 }
 
-bool SkPictureRecord::clipRect(const SkRect& rect, SkRegion::Op op) {
-    addDraw(CLIP_RECT);
-    addRect(rect);
-    addInt(op);
-
-    size_t offset = fWriter.size();
-    addInt(fRestoreOffsetStack.top());
-    fRestoreOffsetStack.top() = offset;
-
-    validate();
-    return this->INHERITED::clipRect(rect, op);
+static bool regionOpExpands(SkRegion::Op op) {
+    switch (op) {
+        case SkRegion::kUnion_Op:
+        case SkRegion::kXOR_Op:
+        case SkRegion::kReverseDifference_Op:
+        case SkRegion::kReplace_Op:
+            return true;
+        case SkRegion::kIntersect_Op:
+        case SkRegion::kDifference_Op:
+            return false;
+        default:
+            SkDEBUGFAIL("unknown region op");
+            return false;
+    }
 }
 
-bool SkPictureRecord::clipPath(const SkPath& path, SkRegion::Op op) {
-    addDraw(CLIP_PATH);
-    addPath(path);
-    addInt(op);
+void SkPictureRecord::recordOffsetForRestore(SkRegion::Op op) {
+    if (regionOpExpands(op)) {
+        // Run back through any previous clip ops, and mark their offset to
+        // be 0, disabling their ability to trigger a jump-to-restore, otherwise
+        // they could hide this clips ability to expand the clip (i.e. go from
+        // empty to non-empty).
+        uint32_t offset = fRestoreOffsetStack.top();
+        while (offset) {
+            uint32_t* peek = fWriter.peek32(offset);
+            offset = *peek;
+            *peek = 0;
+        }
+    }
 
     size_t offset = fWriter.size();
     addInt(fRestoreOffsetStack.top());
     fRestoreOffsetStack.top() = offset;
+}
+
+bool SkPictureRecord::clipRect(const SkRect& rect, SkRegion::Op op, bool doAA) {
+    addDraw(CLIP_RECT);
+    addRect(rect);
+    addInt(ClipParams_pack(op, doAA));
+
+    this->recordOffsetForRestore(op);
+
+    validate();
+    return this->INHERITED::clipRect(rect, op, doAA);
+}
+
+bool SkPictureRecord::clipPath(const SkPath& path, SkRegion::Op op, bool doAA) {
+    addDraw(CLIP_PATH);
+    addPath(path);
+    addInt(ClipParams_pack(op, doAA));
+
+    this->recordOffsetForRestore(op);
 
     validate();
 
     if (fRecordFlags & SkPicture::kUsePathBoundsForClip_RecordingFlag) {
-        return this->INHERITED::clipRect(path.getBounds(), op);
+        return this->INHERITED::clipRect(path.getBounds(), op, doAA);
     } else {
-        return this->INHERITED::clipPath(path, op);
+        return this->INHERITED::clipPath(path, op, doAA);
     }
 }
 
 bool SkPictureRecord::clipRegion(const SkRegion& region, SkRegion::Op op) {
     addDraw(CLIP_REGION);
     addRegion(region);
-    addInt(op);
+    addInt(ClipParams_pack(op, false));
 
-    size_t offset = fWriter.size();
-    addInt(fRestoreOffsetStack.top());
-    fRestoreOffsetStack.top() = offset;
+    this->recordOffsetForRestore(op);
 
     validate();
     return this->INHERITED::clipRegion(region, op);
@@ -223,11 +274,21 @@ void SkPictureRecord::drawBitmapRect(const SkBitmap& bitmap, const SkIRect* src,
 }
 
 void SkPictureRecord::drawBitmapMatrix(const SkBitmap& bitmap, const SkMatrix& matrix,
-                              const SkPaint* paint) {
+                                       const SkPaint* paint) {
     addDraw(DRAW_BITMAP_MATRIX);
     addPaintPtr(paint);
     addBitmap(bitmap);
     addMatrix(matrix);
+    validate();
+}
+
+void SkPictureRecord::drawBitmapNine(const SkBitmap& bitmap, const SkIRect& center,
+                                     const SkRect& dst, const SkPaint* paint) {
+    addDraw(DRAW_BITMAP_NINE);
+    addPaintPtr(paint);
+    addBitmap(bitmap);
+    addIRect(center);
+    addRect(dst);
     validate();
 }
 
@@ -382,20 +443,6 @@ void SkPictureRecord::drawPicture(SkPicture& picture) {
     validate();
 }
 
-void SkPictureRecord::drawShape(SkShape* shape) {
-    addDraw(DRAW_SHAPE);
-
-    int index = fShapes.find(shape);
-    if (index < 0) {    // not found
-        index = fShapes.count();
-        *fShapes.append() = shape;
-        shape->ref();
-    }
-    // follow the convention of recording a 1-based index
-    addInt(index + 1);
-    validate();
-}
-
 void SkPictureRecord::drawVertices(VertexMode vmode, int vertexCount,
                           const SkPoint vertices[], const SkPoint texs[],
                           const SkColor colors[], SkXfermode*,
@@ -447,7 +494,6 @@ void SkPictureRecord::reset() {
     fPaints.reset();
     fPictureRefs.unrefAll();
     fRegions.reset();
-    fShapes.safeUnrefAll();
     fWriter.reset();
     fHeap.reset();
 
@@ -530,6 +576,10 @@ void SkPictureRecord::addRectPtr(const SkRect* rect) {
     if (fWriter.writeBool(rect != NULL)) {
         fWriter.writeRect(*rect);
     }
+}
+
+void SkPictureRecord::addIRect(const SkIRect& rect) {
+    fWriter.write(&rect, sizeof(rect));
 }
 
 void SkPictureRecord::addIRectPtr(const SkIRect* rect) {

@@ -1,3 +1,10 @@
+
+/*
+ * Copyright 2011 Google Inc.
+ *
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
+ */
 #ifndef SkPictureFlat_DEFINED
 #define SkPictureFlat_DEFINED
 
@@ -42,7 +49,8 @@ enum DrawType {
     SCALE,
     SET_MATRIX,
     SKEW,
-    TRANSLATE
+    TRANSLATE,
+    DRAW_BITMAP_NINE
 };
 
 enum DrawVertexFlags {
@@ -50,6 +58,25 @@ enum DrawVertexFlags {
     DRAW_VERTICES_HAS_COLORS  = 0x02,
     DRAW_VERTICES_HAS_INDICES = 0x04
 };
+
+///////////////////////////////////////////////////////////////////////////////
+// clipparams are packed in 5 bits
+//  doAA:1 | regionOp:4
+
+static inline uint32_t ClipParams_pack(SkRegion::Op op, bool doAA) {
+    unsigned doAABit = doAA ? 1 : 0;
+    return (doAABit << 4) | op;
+}
+
+static inline SkRegion::Op ClipParams_unpackRegionOp(uint32_t packed) {
+    return (SkRegion::Op)(packed & 0xF);
+}
+
+static inline bool ClipParams_unpackDoAA(uint32_t packed) {
+    return SkToBool((packed >> 4) & 1);
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 class SkRefCntPlayback {
 public:

@@ -1,18 +1,11 @@
+
 /*
- * Copyright (C) 2006 The Android Open Source Project
+ * Copyright 2006 The Android Open Source Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Use of this source code is governed by a BSD-style license that can be
+ * found in the LICENSE file.
  */
+
 
 #ifndef SkScalerContext_DEFINED
 #define SkScalerContext_DEFINED
@@ -22,6 +15,8 @@
 #include "SkPaint.h"
 #include "SkPath.h"
 #include "SkPoint.h"
+
+//#define SK_USE_COLOR_LUMINANCE
 
 class SkDescriptor;
 class SkMaskFilter;
@@ -60,7 +55,9 @@ struct SkGlyph {
         unsigned rb = width;
         if (SkMask::kBW_Format == format) {
             rb = (rb + 7) >> 3;
-		} else if (SkMask::kARGB32_Format == format) {
+		} else if (SkMask::kARGB32_Format == format ||
+                   SkMask::kLCD32_Format == format)
+        {
 			rb <<= 2;
 		} else if (SkMask::kLCD16_Format == format) {
 			rb = SkAlign4(rb << 1);
@@ -157,43 +154,61 @@ struct SkGlyph {
     }
 
     void toMask(SkMask* mask) const;
-
-    /** Given a glyph which is has a mask format of LCD or VerticalLCD, take
-        the A8 plane in fImage and produce a valid LCD plane from it.
-    */
-    void expandA8ToLCD() const;
 };
 
 class SkScalerContext {
 public:
     enum Flags {
-        kFrameAndFill_Flag  = 0x01,
-        kDevKernText_Flag   = 0x02,
-        kGammaForBlack_Flag = 0x04, // illegal to set both Gamma flags
-        kGammaForWhite_Flag = 0x08, // illegal to set both Gamma flags
+        kFrameAndFill_Flag        = 0x0001,
+        kDevKernText_Flag         = 0x0002,
+        kEmbeddedBitmapText_Flag  = 0x0004,
+        kEmbolden_Flag            = 0x0008,
+        kSubpixelPositioning_Flag = 0x0010,
+        kAutohinting_Flag         = 0x0020,
+        kVertical_Flag            = 0x0040,
+
         // together, these two flags resulting in a two bit value which matches
         // up with the SkPaint::Hinting enum.
-        kHintingBit1_Flag   = 0x10,
-        kHintingBit2_Flag   = 0x20,
-        kEmbeddedBitmapText_Flag = 0x40,
-        kEmbolden_Flag      = 0x80,
-        kSubpixelPositioning_Flag = 0x100,
-        kAutohinting_Flag   = 0x200,
-        // these should only ever be set if fMaskFormat is LCD
-        kLCD_Vertical_Flag  = 0x400,    // else Horizontal
-        kLCD_BGROrder_Flag  = 0x800,    // else RGB order
+        kHinting_Shift            = 7, // to shift into the other flags above
+        kHintingBit1_Flag         = 0x0080,
+        kHintingBit2_Flag         = 0x0100,
+
+        // these should only ever be set if fMaskFormat is LCD16 or LCD32
+        kLCD_Vertical_Flag        = 0x0200,    // else Horizontal
+        kLCD_BGROrder_Flag        = 0x0400,    // else RGB order
+
+        // Generate A8 from LCD source (for GDI), only meaningful if fMaskFormat is kA8
+        // Perhaps we can store this (instead) in fMaskFormat, in hight bit?
+        kGenA8FromLCD_Flag        = 0x0800,
+
+#ifdef SK_USE_COLOR_LUMINANCE
+        kLuminance_Bits           = 3,
+#else
+        // luminance : 0 for black text, kLuminance_Max for white text
+        kLuminance_Shift          = 13, // shift to land in the high 3-bits of Flags
+        kLuminance_Bits           = 3,  // ensure Flags doesn't exceed 16bits
+#endif
     };
-private:
+    
+    // computed values
     enum {
-        kHintingMask = kHintingBit1_Flag | kHintingBit2_Flag
+        kHinting_Mask   = kHintingBit1_Flag | kHintingBit2_Flag,
+#ifdef SK_USE_COLOR_LUMINANCE
+#else
+        kLuminance_Max  = (1 << kLuminance_Bits) - 1,
+        kLuminance_Mask = kLuminance_Max << kLuminance_Shift,
+#endif
     };
-public:
+
     struct Rec {
         uint32_t    fOrigFontID;
         uint32_t    fFontID;
         SkScalar    fTextSize, fPreScaleX, fPreSkewX;
         SkScalar    fPost2x2[2][2];
         SkScalar    fFrameWidth, fMiterLimit;
+#ifdef SK_USE_COLOR_LUMINANCE
+        uint32_t    fLumBits;
+#endif
         uint8_t     fMaskFormat;
         uint8_t     fStrokeJoin;
         uint16_t    fFlags;
@@ -207,20 +222,44 @@ public:
         void    getSingleMatrix(SkMatrix*) const;
 
         SkPaint::Hinting getHinting() const {
-            return static_cast<SkPaint::Hinting>((fFlags & kHintingMask) >> 4);
+            unsigned hint = (fFlags & kHinting_Mask) >> kHinting_Shift;
+            return static_cast<SkPaint::Hinting>(hint);
         }
 
         void setHinting(SkPaint::Hinting hinting) {
-            fFlags = (fFlags & ~kHintingMask) | (hinting << 4);
+            fFlags = (fFlags & ~kHinting_Mask) | (hinting << kHinting_Shift);
         }
-
+        
         SkMask::Format getFormat() const {
             return static_cast<SkMask::Format>(fMaskFormat);
         }
-
-        bool isLCD() const {
-            return SkMask::FormatIsLCD(this->getFormat());
+        
+#ifdef SK_USE_COLOR_LUMINANCE
+        SkColor getLuminanceColor() const {
+            return fLumBits;
         }
+        
+        void setLuminanceColor(SkColor c) {
+            fLumBits = c;
+        }
+#else
+        unsigned getLuminanceBits() const {
+            return (fFlags & kLuminance_Mask) >> kLuminance_Shift;
+        }
+        
+        void setLuminanceBits(unsigned lum) {
+            SkASSERT(lum <= kLuminance_Max);
+            fFlags = (fFlags & ~kLuminance_Mask) | (lum << kLuminance_Shift);
+        }
+
+        U8CPU getLuminanceByte() const {
+            SkASSERT(3 == kLuminance_Bits);
+            unsigned lum = this->getLuminanceBits();
+            lum |= (lum << kLuminance_Bits);
+            lum |= (lum << kLuminance_Bits*2);
+            return lum >> (4*kLuminance_Bits - 8);
+        }
+#endif
     };
 
     SkScalerContext(const SkDescriptor* desc);
@@ -230,6 +269,10 @@ public:
         return (SkMask::Format)fRec.fMaskFormat;
     }
 
+    bool isSubpixel() const {
+        return SkToBool(fRec.fFlags & kSubpixelPositioning_Flag);
+    }
+    
     // remember our glyph offset/base
     void setBaseGlyphCount(unsigned baseGlyphCount) {
         fBaseGlyphCount = baseGlyphCount;
@@ -240,7 +283,7 @@ public:
         fact correspond to a different font/context. In that case, we use the
         base-glyph-count to know how to translate back into local glyph space.
      */
-    uint16_t    charToGlyphID(SkUnichar uni);
+    uint16_t charToGlyphID(SkUnichar uni);
 
     /** Map the glyphID to its glyph index, and then to its char code. Unmapped
         glyphs return zero.
@@ -255,7 +298,13 @@ public:
     void        getFontMetrics(SkPaint::FontMetrics* mX,
                                SkPaint::FontMetrics* mY);
 
+#ifdef SK_BUILD_FOR_ANDROID
+    unsigned getBaseGlyphCount(SkUnichar charCode);
+#endif
+
     static inline void MakeRec(const SkPaint&, const SkMatrix*, Rec* rec);
+    static inline void PostMakeRec(Rec*);
+
     static SkScalerContext* Create(const SkDescriptor*);
 
 protected:
@@ -273,11 +322,17 @@ protected:
     // default impl returns 0, indicating failure.
     virtual SkUnichar generateGlyphToChar(uint16_t);
 
+    void forceGenerateImageFromPath() { fGenerateImageFromPath = true; }
+
 private:
     SkPathEffect*   fPathEffect;
     SkMaskFilter*   fMaskFilter;
     SkRasterizer*   fRasterizer;
     SkScalar        fDevFrameWidth;
+
+    // if this is set, we draw the image from a path, rather than
+    // calling generateImage.
+    bool fGenerateImageFromPath;
 
     void internalGetPath(const SkGlyph& glyph, SkPath* fillPath,
                          SkPath* devPath, SkMatrix* fillToDevMatrix);
@@ -297,6 +352,22 @@ private:
 #define kPathEffect_SkDescriptorTag     SkSetFourByteTag('p', 't', 'h', 'e')
 #define kMaskFilter_SkDescriptorTag     SkSetFourByteTag('m', 's', 'k', 'f')
 #define kRasterizer_SkDescriptorTag     SkSetFourByteTag('r', 'a', 's', 't')
+
+///////////////////////////////////////////////////////////////////////////////
+
+enum SkAxisAlignment {
+    kNone_SkAxisAlignment,
+    kX_SkAxisAlignment,
+    kY_SkAxisAlignment
+};
+
+/**
+ *  Return the axis (if any) that the baseline for horizontal text will land on
+ *  after running through the specified matrix.
+ *
+ *  As an example, the identity matrix will return kX_SkAxisAlignment
+ */
+SkAxisAlignment SkComputeAxisAlignmentForHText(const SkMatrix& matrix);
 
 #endif
 
