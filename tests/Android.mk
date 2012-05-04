@@ -72,6 +72,8 @@ LOCAL_SRC_FILES:= \
 
 LOCAL_MODULE:= skia_test
 
+LOCAL_CFLAGS += -fno-strict-aliasing
+
 LOCAL_C_INCLUDES := \
    external/freetype/include \
    external/skia/include/core \
