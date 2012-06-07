@@ -41,7 +41,7 @@ LOCAL_C_INCLUDES := \
     external/skia/src/core \
     external/skia/src/gpu
 
-#LOCAL_CFLAGS := 
+LOCAL_CFLAGS := -fno-strict-aliasing
 
 LOCAL_MODULE := skia_bench
 
