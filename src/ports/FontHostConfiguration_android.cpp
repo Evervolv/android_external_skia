@@ -16,8 +16,9 @@
 */
 
 #include "FontHostConfiguration_android.h"
-#include "SkString.h"
+#include "SkLanguage.h"
 #include "SkTDArray.h"
+#include "SkTypeface.h"
 #include <expat.h>
 #if !defined(SK_BUILD_FOR_ANDROID_NDK)
     #include <cutils/properties.h>
@@ -26,7 +27,6 @@
 #define SYSTEM_FONTS_FILE "/system/etc/system_fonts.xml"
 #define FALLBACK_FONTS_FILE "/system/etc/fallback_fonts.xml"
 #define VENDOR_FONTS_FILE "/vendor/etc/fallback_fonts.xml"
-
 
 // These defines are used to determine the kind of tag that we're currently
 // populating with data. We only care about the sibling tags nameset and fileset
@@ -46,12 +46,13 @@ struct FamilyData {
     XML_Parser *parser;                // The expat parser doing the work
     SkTDArray<FontFamily*> &families;  // The array that each family is put into as it is parsed
     FontFamily *currentFamily;         // The current family being created
+    FontFileInfo *currentFontInfo;     // The current fontInfo being created
     int currentTag;                    // A flag to indicate whether we're in nameset/fileset tags
 };
 
 /**
  * Handler for arbitrary text. This is used to parse the text inside each name
- * or file tag. The resulting strings are put into the fNames or fFileNames arrays.
+ * or file tag. The resulting strings are put into the fNames or FontFileInfo arrays.
  */
 void textHandler(void *data, const char *s, int len) {
     FamilyData *familyData = (FamilyData*) data;
@@ -68,13 +69,46 @@ void textHandler(void *data, const char *s, int len) {
             *(familyData->currentFamily->fNames.append()) = buff;
             break;
         case FILESET_TAG:
-            *(familyData->currentFamily->fFileNames.append()) = buff;
+            if (familyData->currentFontInfo) {
+                familyData->currentFontInfo->fFileName = buff;
+            }
             break;
         default:
             // Noop - don't care about any text that's not in the Fonts or Names list
             break;
         }
     }
+}
+
+/**
+ * Handler for font files. This processes the attributes for language and
+ * variants then lets textHandler handle the actual file name
+ */
+void fontFileElementHandler(FamilyData *familyData, const char **attributes) {
+    FontFileInfo* newFileInfo = new FontFileInfo();
+    if (attributes) {
+        int currentAttributeIndex = 0;
+        while (attributes[currentAttributeIndex]) {
+            const char* attributeName = attributes[currentAttributeIndex];
+            const char* attributeValue = attributes[currentAttributeIndex+1];
+            int nameLength = strlen(attributeName);
+            int valueLength = strlen(attributeValue);
+            if (strncmp(attributeName, "variant", nameLength) == 0) {
+                if (strncmp(attributeValue, "elegant", valueLength) == 0) {
+                    newFileInfo->fVariant = SkPaint::kElegant_Variant;
+                } else if (strncmp(attributeValue, "compact", valueLength) == 0) {
+                    newFileInfo->fVariant = SkPaint::kCompact_Variant;
+                }
+            } else if (strncmp(attributeName, "lang", nameLength) == 0) {
+                newFileInfo->fLanguage = SkLanguage(attributeValue);
+            }
+            //each element is a pair of attributeName/attributeValue string pairs
+            currentAttributeIndex += 2;
+        }
+    }
+    *(familyData->currentFamily->fFontFileArray.append()) = newFileInfo;
+    familyData->currentFontInfo = newFileInfo;
+    XML_SetCharacterDataHandler(*familyData->parser, textHandler);
 }
 
 /**
@@ -98,14 +132,16 @@ void startElementHandler(void *data, const char *tag, const char **atts) {
                 familyData->currentFamily->order = value;
             }
         }
-    } else if (len == 7 && strncmp(tag, "nameset", len)== 0) {
+    } else if (len == 7 && strncmp(tag, "nameset", len) == 0) {
         familyData->currentTag = NAMESET_TAG;
     } else if (len == 7 && strncmp(tag, "fileset", len) == 0) {
         familyData->currentTag = FILESET_TAG;
-    } else if ((strncmp(tag, "name", len) == 0 && familyData->currentTag == NAMESET_TAG) ||
-            (strncmp(tag, "file", len) == 0 && familyData->currentTag == FILESET_TAG)) {
+    } else if (strncmp(tag, "name", len) == 0 && familyData->currentTag == NAMESET_TAG) {
         // If it's a Name, parse the text inside
         XML_SetCharacterDataHandler(*familyData->parser, textHandler);
+    } else if (strncmp(tag, "file", len) == 0 && familyData->currentTag == FILESET_TAG) {
+        // If it's a file, parse the attributes, then parse the text inside
+        fontFileElementHandler(familyData, atts);
     }
 }
 
@@ -120,74 +156,15 @@ void endElementHandler(void *data, const char *tag) {
         // Done parsing a Family - store the created currentFamily in the families array
         *familyData->families.append() = familyData->currentFamily;
         familyData->currentFamily = NULL;
-    } else if (len == 7 && strncmp(tag, "nameset", len)== 0) {
+    } else if (len == 7 && strncmp(tag, "nameset", len) == 0) {
         familyData->currentTag = NO_TAG;
-    } else if (len == 7 && strncmp(tag, "fileset", len)== 0) {
+    } else if (len == 7 && strncmp(tag, "fileset", len) == 0) {
         familyData->currentTag = NO_TAG;
     } else if ((strncmp(tag, "name", len) == 0 && familyData->currentTag == NAMESET_TAG) ||
             (strncmp(tag, "file", len) == 0 && familyData->currentTag == FILESET_TAG)) {
         // Disable the arbitrary text handler installed to load Name data
         XML_SetCharacterDataHandler(*familyData->parser, NULL);
     }
-}
-
-#if !defined(SK_BUILD_FOR_ANDROID_NDK)
-/**
- * Read the persistent locale.
- */
-void getLocale(char* language, char* region)
-{
-    char propLang[PROPERTY_VALUE_MAX], propRegn[PROPERTY_VALUE_MAX];
-
-    property_get("persist.sys.language", propLang, "");
-    property_get("persist.sys.country", propRegn, "");
-    if (*propLang == 0 && *propRegn == 0) {
-        /* Set to ro properties, default is en_US */
-        property_get("ro.product.locale.language", propLang, "en");
-        property_get("ro.product.locale.region", propRegn, "US");
-    }
-    strncat(language, propLang, 2);
-    strncat(region, propRegn, 2);
-}
-#endif
-
-/**
- * Use the current system locale (language and region) to open the best matching
- * customization. For example, when the language is Japanese, the sequence might be:
- *      /system/etc/fallback_fonts-ja-JP.xml
- *      /system/etc/fallback_fonts-ja.xml
- *      /system/etc/fallback_fonts.xml
- */
-FILE* openLocalizedFile(const char* origname) {
-    FILE* file = 0;
-
-#if !defined(SK_BUILD_FOR_ANDROID_NDK)
-    SkString basename;
-    SkString filename;
-    char language[3] = "";
-    char region[3] = "";
-
-    basename.set(origname);
-    // Remove the .xml suffix. We'll add it back in a moment.
-    if (basename.endsWith(".xml")) {
-        basename.resize(basename.size()-4);
-    }
-    getLocale(language, region);
-    // Try first with language and region
-    filename.printf("%s-%s-%s.xml", basename.c_str(), language, region);
-    file = fopen(filename.c_str(), "r");
-    if (!file) {
-        // If not found, try next with just language
-        filename.printf("%s-%s.xml", basename.c_str(), language);
-        file = fopen(filename.c_str(), "r");
-    }
-#endif
-
-    if (!file) {
-        // If still not found, try just the original name
-        file = fopen(origname, "r");
-    }
-    return file;
 }
 
 /**
@@ -199,7 +176,7 @@ void parseConfigFile(const char *filename, SkTDArray<FontFamily*> &families) {
     FamilyData *familyData = new FamilyData(&parser, families);
     XML_SetUserData(parser, familyData);
     XML_SetElementHandler(parser, startElementHandler, endElementHandler);
-    FILE *file = openLocalizedFile(filename);
+    FILE *file = fopen(filename, "r");
     // Some of the files we attempt to parse (in particular, /vendor/etc/fallback_fonts.xml)
     // are optional - failure here is okay because one of these optional files may not exist.
     if (file == NULL) {
@@ -215,6 +192,7 @@ void parseConfigFile(const char *filename, SkTDArray<FontFamily*> &families) {
         }
         XML_Parse(parser, buffer, len, done);
     }
+    fclose(file);
 }
 
 void getSystemFontFamilies(SkTDArray<FontFamily*> &fontFamilies) {

@@ -39,6 +39,10 @@ ifeq ($(ARCH_ARM_HAVE_VFP),true)
     LOCAL_CFLAGS += -DANDROID_LARGE_MEMORY_DEVICE
 endif
 
+ifeq ($(TARGET_ARCH),x86)
+    LOCAL_CFLAGS += -DANDROID_LARGE_MEMORY_DEVICE
+endif
+
 ifneq ($(ARCH_ARM_HAVE_VFP),true)
 	LOCAL_CFLAGS += -DSK_SOFTWARE_FLOAT
 endif
@@ -108,6 +112,7 @@ LOCAL_SRC_FILES:= \
 	src/core/SkGeometry.cpp \
 	src/core/SkGlyphCache.cpp \
 	src/core/SkGraphics.cpp \
+	src/core/SkLanguage.cpp \
 	src/core/SkLineClipper.cpp \
 	src/core/SkMallocPixelRef.cpp \
 	src/core/SkMask.cpp \
@@ -295,6 +300,7 @@ LOCAL_C_INCLUDES += \
 	$(LOCAL_PATH)/include/config \
 	$(LOCAL_PATH)/include/effects \
 	$(LOCAL_PATH)/include/images \
+	$(LOCAL_PATH)/include/ports \
 	$(LOCAL_PATH)/include/utils \
 	$(LOCAL_PATH)/include/xml \
 	external/freetype/include \

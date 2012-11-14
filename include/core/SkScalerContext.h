@@ -15,6 +15,11 @@
 #include "SkPaint.h"
 #include "SkPath.h"
 #include "SkPoint.h"
+#include "SkTypeface.h"
+
+#ifdef SK_BUILD_FOR_ANDROID
+#include "SkLanguage.h"
+#endif
 
 //#define SK_USE_COLOR_LUMINANCE
 
@@ -209,6 +214,10 @@ public:
 #ifdef SK_USE_COLOR_LUMINANCE
         uint32_t    fLumBits;
 #endif
+#ifdef SK_BUILD_FOR_ANDROID
+        SkLanguage fLanguage;
+        SkPaint::FontVariant fFontVariant;
+#endif
         uint8_t     fMaskFormat;
         uint8_t     fStrokeJoin;
         uint16_t    fFlags;
@@ -233,7 +242,6 @@ public:
         SkMask::Format getFormat() const {
             return static_cast<SkMask::Format>(fMaskFormat);
         }
-        
 #ifdef SK_USE_COLOR_LUMINANCE
         SkColor getLuminanceColor() const {
             return fLumBits;
@@ -299,6 +307,10 @@ public:
                                SkPaint::FontMetrics* mY);
 
 #ifdef SK_BUILD_FOR_ANDROID
+    // This function must be public for SkTypeface_android.h, but should not be
+    // called by other callers
+    SkFontID findTypefaceIdForChar(SkUnichar uni);
+
     unsigned getBaseGlyphCount(SkUnichar charCode);
 #endif
 
@@ -325,6 +337,8 @@ protected:
     void forceGenerateImageFromPath() { fGenerateImageFromPath = true; }
 
 private:
+    SkScalerContext* getContextFromChar(SkUnichar uni, unsigned& glyphID);
+
     SkPathEffect*   fPathEffect;
     SkMaskFilter*   fMaskFilter;
     SkRasterizer*   fRasterizer;

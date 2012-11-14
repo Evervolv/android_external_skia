@@ -32,6 +32,7 @@
 //#define SK_REPORT_API_RANGE_CHECK
 
 #ifdef SK_BUILD_FOR_ANDROID
+#include "SkLanguage.h"
 #define GEN_ID_INC                  fGenerationID++
 #define GEN_ID_INC_EVAL(expression) if (expression) { fGenerationID++; }
 #else
@@ -71,7 +72,8 @@ SkPaint::SkPaint() {
     fTextEncoding = kUTF8_TextEncoding;
     fHinting    = SkPaintDefaults_Hinting;
 #ifdef SK_BUILD_FOR_ANDROID
-    new(&fTextLocale) SkString();
+    fLanguage = SkLanguage();
+    fFontVariant = kDefault_Variant;
     fGenerationID = 0;
 #endif
 }
@@ -88,9 +90,6 @@ SkPaint::SkPaint(const SkPaint& src) {
     SkSafeRef(fRasterizer);
     SkSafeRef(fLooper);
     SkSafeRef(fImageFilter);
-#ifdef SK_BUILD_FOR_ANDROID
-    new(&fTextLocale) SkString(src.fTextLocale);
-#endif
 }
 
 SkPaint::~SkPaint() {
@@ -129,12 +128,10 @@ SkPaint& SkPaint::operator=(const SkPaint& src) {
     SkSafeUnref(fImageFilter);
 
 #ifdef SK_BUILD_FOR_ANDROID
-    fTextLocale.~SkString();
     uint32_t oldGenerationID = fGenerationID;
 #endif
     memcpy(this, &src, sizeof(src));
 #ifdef SK_BUILD_FOR_ANDROID
-    new(&fTextLocale) SkString(src.fTextLocale);
     fGenerationID = oldGenerationID + 1;
 #endif
 
@@ -366,12 +363,24 @@ void SkPaint::setTextEncoding(TextEncoding encoding) {
 }
 
 #ifdef SK_BUILD_FOR_ANDROID
-void SkPaint::setTextLocale(const SkString& locale) {
-    if(!fTextLocale.equals(locale)) {
-        fTextLocale.set(locale);
+void SkPaint::setLanguage(const SkLanguage& language) {
+    if(fLanguage != language) {
+        fLanguage = language;
         GEN_ID_INC;
     }
 }
+
+void SkPaint::setFontVariant(FontVariant fontVariant) {
+    if ((unsigned)fontVariant <= kLast_Variant) {
+        GEN_ID_INC_EVAL((unsigned)fontVariant != fFontVariant);
+        fFontVariant = fontVariant;
+    } else {
+#ifdef SK_REPORT_API_RANGE_CHECK
+        SkDebugf("SkPaint::setFontVariant(%d) out of range\n", fontVariant);
+#endif
+    }
+}
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1561,6 +1570,10 @@ void SkScalerContext::MakeRec(const SkPaint& paint,
 #else
     rec->setLuminanceBits(computeLuminance(paint));
 #endif
+#ifdef SK_BUILD_FOR_ANDROID
+    rec->fLanguage = paint.getLanguage();
+    rec->fFontVariant = paint.getFontVariant();
+#endif //SK_BUILD_FOR_ANDROID
 
     /*  Allow the fonthost to modify our rec before we use it as a key into the
         cache. This way if we're asking for something that they will ignore,
@@ -1836,6 +1849,12 @@ void SkPaint::flatten(SkFlattenableWriteBuffer& buffer) const {
     *ptr++ = pack_4(this->getStrokeCap(), this->getStrokeJoin(),
                     this->getStyle(), this->getTextEncoding());
 
+#ifdef SK_BUILD_FOR_ANDROID
+    buffer.writeInt(this->getFontVariant());
+    const SkString& langTag = this->getLanguage().getTag();
+    buffer.writeString(langTag.c_str(), langTag.size());
+#endif
+
     // now we're done with ptr and the (pre)reserved space. If we need to write
     // additional fields, use the buffer directly
     if (flatFlags & kHasTypeface_FlatFlag) {
@@ -1889,6 +1908,11 @@ void SkPaint::unflatten(SkFlattenableReadBuffer& buffer) {
     this->setStrokeJoin(static_cast<Join>((tmp >> 16) & 0xFF));
     this->setStyle(static_cast<Style>((tmp >> 8) & 0xFF));
     this->setTextEncoding(static_cast<TextEncoding>((tmp >> 0) & 0xFF));
+
+#ifdef SK_BUILD_FOR_ANDROID
+    this->setFontVariant(SkPaint::FontVariant(buffer.readInt()));
+    this->setLanguage(SkLanguage(buffer.readString()));
+#endif
 
     if (flatFlags & kHasTypeface_FlatFlag) {
         this->setTypeface(buffer.readTypeface());
