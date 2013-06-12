@@ -531,6 +531,11 @@ LOCAL_STATIC_LIBRARIES := \
 	libgif \
 	libsfntly
 
+ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
+	LOCAL_WHOLE_STATIC_LIBRARIES += libqc-skia
+endif
+
+
 LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/include/config \
 	$(LOCAL_PATH)/include/core \
