@@ -523,7 +523,8 @@ LOCAL_SHARED_LIBRARIES := \
 	libicuuc \
 	libicui18n \
 	libexpat \
-	libft2
+	libft2 \
+	libcutils
 
 LOCAL_STATIC_LIBRARIES := \
 	libwebp-decode \

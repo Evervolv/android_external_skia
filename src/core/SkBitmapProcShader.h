@@ -41,7 +41,12 @@ public:
         BitmapProcShaderContext(const SkBitmapProcShader&, const ContextRec&, SkBitmapProcState*);
         virtual ~BitmapProcShaderContext();
 
-        virtual void shadeSpan(int x, int y, SkPMColor dstC[], int count) SK_OVERRIDE;
+        virtual void shadeSpan(int x, int y, SkPMColor dstC[], int count) SK_OVERRIDE __attribute__((weak));
+        // override beginRect and endRect
+        virtual void beginRect(int x, int y, int width);
+        virtual void endRect();
+
+        virtual SkShaderIds getID() { return kSkBitmapProcShader_Class; }
         virtual ShadeProc asAShadeProc(void** ctx) SK_OVERRIDE;
         virtual void shadeSpan16(int x, int y, uint16_t dstC[], int count) SK_OVERRIDE;
 
