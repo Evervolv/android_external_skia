@@ -225,6 +225,11 @@ bool SkBitmap::setConfig(Config config, int width, int height, size_t rowBytes,
     SkColorType ct = SkBitmapConfigToColorType(config);
     return this->setInfo(SkImageInfo::Make(width, height, ct, alphaType), rowBytes);
 }
+
+extern "C" void _ZN8SkBitmap9setConfigENS_6ConfigEiii(SkBitmap *bitmap,
+        SkBitmap::Config c, int width, int height, int rowBytes) {
+    bitmap->setConfig(c, width, height, (size_t) rowBytes);
+}
 #endif
 
 bool SkBitmap::setAlphaType(SkAlphaType alphaType) {
