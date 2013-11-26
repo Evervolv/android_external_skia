@@ -1,4 +1,3 @@
-
 /*
  * Copyright 2011 Google Inc.
  *
@@ -27,6 +26,10 @@ extern void  Repeat_S16_D16_filter_DX_shaderproc_neon(const SkBitmapProcState&, 
 extern void  SI8_opaque_D32_filter_DX_neon(const SkBitmapProcState&, const uint32_t*, int, SkPMColor*);
 extern void  SI8_opaque_D32_filter_DX_shaderproc_neon(const SkBitmapProcState&, int, int, uint32_t*, int);
 extern void  Clamp_SI8_opaque_D32_filter_DX_shaderproc_neon(const SkBitmapProcState&, int, int, uint32_t*, int);
+#if !defined(__LP64__)
+extern void  S32_opaque_D32_filter_DX_neon(const SkBitmapProcState&, const uint32_t*, int, SkPMColor*);
+extern void  Clamp_S32_Opaque_D32_filter_DX_shaderproc_neon(const SkBitmapProcState&, int, int, uint32_t*, int);
+#endif //#if !defined(__LP64__)
 #endif
 
 #define   NAME_WRAP(x)  x
@@ -626,6 +629,10 @@ bool SkBitmapProcState::chooseProcs(const SkMatrix& inv, const SkPaint& paint) {
             }
         } else if (SK_ARM_NEON_WRAP(SI8_opaque_D32_filter_DX) == fSampleProc32 && clampClamp) {
             fShaderProc32 = SK_ARM_NEON_WRAP(Clamp_SI8_opaque_D32_filter_DX_shaderproc);
+#if !defined(__LP64__)
+        } else if (SK_ARM_NEON_WRAP(S32_opaque_D32_filter_DX) == fSampleProc32 && clampClamp) {
+            fShaderProc32 = SK_ARM_NEON_WRAP(Clamp_S32_Opaque_D32_filter_DX_shaderproc);
+#endif //#if !defined(__LP64__)
         }
 
         if (NULL == fShaderProc32) {
