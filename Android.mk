@@ -581,7 +581,7 @@ LOCAL_C_INCLUDES := \
 	external/giflib \
 	external/jpeg \
 	external/webp/include \
-	frameworks/base/opengl/include \
+	frameworks/native/opengl/include \
 	external/expat/lib
 
 LOCAL_EXPORT_C_INCLUDE_DIRS := \
