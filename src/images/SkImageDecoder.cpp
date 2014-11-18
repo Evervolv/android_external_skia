@@ -260,6 +260,15 @@ bool SkImageDecoder::cropBitmap(SkBitmap *dst, SkBitmap *src, int sampleSize,
 }
 
 ///////////////////////////////////////////////////////////////////////////////
+#ifdef SK_SUPPORT_LEGACY_DECODEFILE
+extern "C" bool _ZN14SkImageDecoder10DecodeFileEPKcP8SkBitmapNS2_6ConfigENS_4ModeEPNS_6FormatE(
+    const char file[], SkBitmap* bm, SkBitmap::Config pref,
+    SkImageDecoder::Mode mode, SkImageDecoder::Format* format) {
+
+    SkColorType ct = SkBitmapConfigToColorType(pref);
+    return SkImageDecoder::DecodeFile(file, bm, ct, mode, format);
+}
+#endif
 
 bool SkImageDecoder::DecodeFile(const char file[], SkBitmap* bm, SkColorType pref,  Mode mode,
                                 Format* format) {
